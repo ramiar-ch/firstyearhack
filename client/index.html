@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Strand Theft Auto (working title)</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <!-- tiny orange dot favicon (stops a 404 error in the console) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='7' fill='%23ff8c1a'/></svg>" />
+  </head>
+  <body>
+    <!-- Three.js draws into this canvas -->
+    <canvas id="game"></canvas>
+
+    <!-- HUD overlays (plain HTML on top of the canvas) -->
+    <div id="loading">Loading London...</div>
+    <div id="help">WASD = walk &nbsp;·&nbsp; Shift = run</div>
+    <div id="credit">
+      Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

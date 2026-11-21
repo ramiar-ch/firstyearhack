@@ -1,0 +1,49 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05070d; /* wet black */
+  font-family: system-ui, sans-serif;
+  color: #ffb347; /* sodium orange */
+}
+
+#game {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  background: #05070d;
+}
+
+#help {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  padding: 6px 10px;
+  background: rgba(5, 7, 13, 0.7);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* OpenStreetMap credit - required by the OSM licence, keep it visible! */
+#credit {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 8px;
+  background: rgba(5, 7, 13, 0.75);
+  border-radius: 3px;
+  font-size: 12px;
+  color: #c9d3e6;
+}
+#credit a {
+  color: #ffb347;
+}
