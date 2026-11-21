@@ -1205,6 +1205,8 @@ function startMissions(){
   // Phone controller: its E button = the keyboard's E; game events make it vibrate.
   phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
   split=new SplitScreen(scene,renderer,blockedAt);
+  // A phone scanned the QR code and joined -> turn on 2 players automatically (the phone drives P2).
+  phone.onPhonesChange=n=>{if(n>0&&!split.on&&!intro)toggleSplit();};
   const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
   twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
   missions.onEvent=e=>phone.haptic(HAPTICS[e]);

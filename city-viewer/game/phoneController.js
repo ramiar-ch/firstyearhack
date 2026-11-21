@@ -21,6 +21,7 @@ export class PhoneController {
   /** onAction: called when the phone's E button is pressed. */
   constructor(onAction) {
     this.onAction = onAction;
+    this.onPhonesChange = () => {}; // set by the game: called with the number of phones connected
     this.input = null;
     this.lastInputTime = 0;
     this.lastAction = 0;
@@ -38,6 +39,7 @@ export class PhoneController {
         this.phones = JSON.parse(e.data).count;
         this.button.textContent = this.phones ? `📱 Phone connected (${this.phones})` : '📱 Phone controller (P)';
         if (this.phones) this.hideQr();
+        this.onPhonesChange(this.phones);
       });
     } catch { /* opened as a file, not through serve.js - no phone support */ }
 
