@@ -83,7 +83,6 @@
       <button data-mode="drive"><kbd>4</kbd><span data-i18n="modeDrive">Drive</span></button>
       <button data-mode="strand"><kbd>5</kbd><span data-i18n="strand">Strand car</span></button>
     </div>
-    <a href="/play/" data-i18n="twoPlayer" style="color:var(--text)">Two-player game</a>
     <button id="lang" title="Language / 语言">中文</button>
   </div>
   <div class="panel" id="side">
@@ -153,7 +152,7 @@ import { loadSettings, applyToSource } from './js/settings.js';
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
    ========================================================= */
 const I18N={
-  en:{twoPlayer:'Two-player game',strand:'Strand car',helpStrand:'<b>Drive</b>　<span class="k">WASD/arrows</span> drive · <span class="k">Space</span> handbrake · <span class="k">E</span> get out · <span class="k">V</span> change view',
+  en:{strand:'Strand car',helpStrand:'<b>Drive</b>　<span class="k">WASD/arrows</span> drive · <span class="k">Space</span> handbrake · <span class="k">E</span> get out · <span class="k">V</span> change view',
     carIn:'In the car · E to get out',carOut:'On foot · E near the car to get in',carNear:'Press E to get in the car',crash:'Crash!',viewChase:'Chase view',viewOverhead:'Overhead view',
     docTitle:'London · Around KCL',loadTitle:'London · 2 km around KCL',brand:'London · Around KCL',modeOrbit:'Orbit',modeWalk:'Walk',modeFly:'Fly',modeDrive:'Drive',places:'Places',time:'Time',
     sp1:'1 min / s',sp4:'4 min / s',sp20:'20 min / s',sp90:'1.5 h / s',display:'Display',optLife:'Traffic & people',optLabels:'Labels',optShadow:'Shadows',optBloom:'Night glow',optFog:'Haze',optMap:'Minimap',optRain:'Drizzle',
@@ -169,7 +168,7 @@ const I18N={
     timeOn:'Time running',timeOff:'Time paused',flySpeed:v=>`Fly speed ${v} m/s`,fromKCL:v=>`${v} m from KCL`,
     joinHint:'Press A on a controller to join',leaveHint:'Hold Start to leave',paused:'paused',addBot:'Add bot',mappingWarn:'Press A — non-standard gamepad mapping',
     load1:'Reading street and building data…',load2:'Laying roads, the Thames and bridges…',load3:n=>`Building ${n} buildings…`,load4:'Planting trees, lamps and street furniture…',load5:'Releasing traffic and pedestrians…',done:'Done',loadFail:'Failed to load: '},
-  zh:{twoPlayer:'双人游戏',strand:'河岸街小车',helpStrand:'<b>驾驶</b>　<span class="k">WASD/方向键</span> 驾驶 · <span class="k">空格</span> 手刹 · <span class="k">E</span> 下车 · <span class="k">V</span> 切换视角',
+  zh:{strand:'河岸街小车',helpStrand:'<b>驾驶</b>　<span class="k">WASD/方向键</span> 驾驶 · <span class="k">空格</span> 手刹 · <span class="k">E</span> 下车 · <span class="k">V</span> 切换视角',
     carIn:'已上车 · 按 E 下车',carOut:'步行 · 靠近汽车按 E 上车',carNear:'按 E 上车',crash:'撞车！',viewChase:'追尾视角',viewOverhead:'俯视视角',
     docTitle:'伦敦 · KCL 周边',loadTitle:'伦敦 · KCL 周边 2 km',brand:'伦敦 · KCL 周边',modeOrbit:'环绕视角',modeWalk:'街道漫步',modeFly:'自由飞行',modeDrive:'驾驶',places:'地点',time:'时间',
     sp1:'1 分钟/秒',sp4:'4 分钟/秒',sp20:'20 分钟/秒',sp90:'1.5 小时/秒',display:'画面',optLife:'行人车辆',optLabels:'地名标签',optShadow:'阴影',optBloom:'夜间泛光',optFog:'雾霭',optMap:'小地图',optRain:'毛毛雨',

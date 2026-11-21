@@ -3,7 +3,6 @@
   "private": true,
   "scripts": {
     "start": "node city-viewer/serve.js",
-    "dev": "npm start",
-    "build": "npm --prefix client run build"
+    "dev": "npm start"
   }
 }

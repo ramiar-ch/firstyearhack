@@ -1,6 +1,6 @@
 # City viewer — 2 km around KCL Strand
 
-A standalone 3D model of the real streets within 2 km of King's College London's Strand campus, built with Three.js. You can orbit, walk the streets at eye level, fly, or drive a black cab / hatchback / Routemaster bus through solid streets. Separate from the game in `/client`; no build step.
+A standalone 3D model of the real streets within 2 km of King's College London's Strand campus, built with Three.js. You can orbit, walk the streets at eye level, fly, or drive a black cab / hatchback / Routemaster bus through solid streets. The viewer runs without a build step.
 
 ## Run it
 
