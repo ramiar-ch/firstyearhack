@@ -217,7 +217,10 @@ import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
 import { PoliceReport } from './game/report.js';
-import { toCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
+import { toCutout, funnyName, holdInHand, swayHeld } from './game/scanItem.js';
+import { holdModelOnCar, Roadblocks } from './game/scanModel.js';
+import { PoliceCar } from './game/policeCar.js';
+import { sfx } from './game/audio.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1082,7 +1085,7 @@ function setupUI(){
   addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
     keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
-    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyK'&&!e.repeat&&report&&!report.hide())report.show(missions.money); /* K = end match: Snowflake police report */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyF'&&!e.repeat)throwWeapon(0);if(e.code==='Slash'&&!e.repeat){e.preventDefault();throwWeapon(1);} /* F / slash = throw weapon */if(e.code==='KeyK'&&!e.repeat&&report&&!report.hide())report.show(missions.money); /* K = end match: Snowflake police report */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1142,6 +1145,8 @@ let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
 let report=null;     // end-of-match police report from Snowflake Cortex (PoliceReport)
+let police=null;     // police car that chases you during an alert (PoliceCar)
+let roadblocks=null; // giant thrown scanned objects (Roadblocks)
 const DEMO=new URLSearchParams(location.search).get('demo')==='1'; // ?demo=1 = Demo Mode
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
@@ -1183,7 +1188,7 @@ function updateDrive(dt){
   const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
-  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);warp.raiseWanted();} // crash = police alert
+  if(car.update(dt,input)){showToast(i18n('crash'));sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);warp.raiseWanted();} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
@@ -1231,7 +1236,12 @@ function startMissions(){
   missions=new MissionManager(scene,places);
   // Phone controller: its E button = the keyboard's E; game events make it vibrate.
   phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
-  split=new SplitScreen(scene,renderer,blockedAt);
+  // Giant thrown objects are solid too: cars (and the police) crash into them.
+  roadblocks=new Roadblocks(scene);
+  const solid=(x,z)=>blockedAt(x,z)||roadblocks.hits(x,z);
+  car.blockedAt=solid;
+  police=new PoliceCar(scene,solid);
+  split=new SplitScreen(scene,renderer,solid);
   // A phone scanned the QR code and joined -> turn on 2 players automatically (the phone drives P2).
   phone.onPhonesChange=n=>{if(n>0&&!split.on&&!intro)toggleSplit();};
   const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
@@ -1241,38 +1251,79 @@ function startMissions(){
   missions.onEvent=(e,who)=>{
     if(e==='escape'){warp.raiseWanted();return;} // intro mission: police chase starts at the pickup
     phone.haptic(HAPTICS[e]);report.log(e,who);
+    if(sfx[e])sfx[e](); // pickup / passed / failed sounds
   };
-  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
+  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);if(e==='warp')sfx.warp();};
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
   // P2 in split screen, otherwise P1.
   phone.onScan=async (url,isCut)=>{
     try{
       const cut=await toCutout(url,isCut),name=funnyName(); // the phone usually sends a finished cut-out
-      if(split.on)holdInCar(split.car2,cut);else{holdInCar(car,cut);holdInHand(cut,name);}
-      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name}`,'passed');
-      phone.haptic(HAPTICS.pickup);
+      // 3D model on the car roof (round things become real 3D, flat things get thickness).
+      if(split.on)holdModelOnCar(split.car2,cut);else{holdModelOnCar(car,cut);holdInHand(cut,name);}
+      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name} · ${split.on?'/':'F'} or 💥 to throw`,'passed');
+      phone.haptic(HAPTICS.pickup);sfx.scan();
     }catch(e){showToast('Scan failed - try again');}
   };
   // INTRO MISSION "Exam Paper Heist" (always the first job): grab the KCL exam
   // papers at Bush House -> the police come -> hide in the red phone box
   // (= warp to 1997) -> deliver to Somerset House in 1997.
   missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'the stolen KCL exam papers',
-    escape:{name:'red phone box',x:warp.position.x,z:warp.position.z,done:()=>warp.retro}}];
+    escape:{name:'red phone box',x:warp.position.x,z:warp.position.z,done:()=>warp.retro||!warp.wanted}}]; // or lose them with a giant roadblock
+  // Phone THROW button: the phone's player throws their weapon.
+  phone.onThrow=()=>{if(!intro)throwWeapon(split.on?1:0);};
   // Handy for debugging: type `game` in the browser console (F12).
-  window.game={car,missions,player,setMode};
+  window.game={car,missions,player,setMode,warp,police,roadblocks,phone,throwWeapon};
 }
 function updateMissions(dt){
   if(!missions)return;
   const active=!intro&&(mode==='drive'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='drive'?car.position:player.pos;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);warp.raiseWanted();}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);warp.raiseWanted();}
+  updatePolice(dt);
+  sfx.engine(mode==='drive'?car.speed:0,mode==='drive'&&!intro,warp.retro); // engine hum
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   warp.update();
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
   document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
+}
+
+// ---- Police car + giant roadblocks (game/policeCar.js, game/scanModel.js) ----
+let policeNearTick=0;
+function updatePolice(dt){
+  if(roadblocks.update(dt)){sfx.thud();phone.haptic(HAPTICS.thud);} // a giant weapon just landed
+  const cars=split.on?[car,split.car2]:[car];
+  // The alert is on -> a police car appears and chases. Off -> it goes away.
+  if(warp.wanted&&!police.active&&!intro)police.start(cars[0],freeSpot);
+  if(!warp.wanted&&police.active&&!police.blocked)police.stop();
+  if(!police.active)return;
+  // Chase whichever player is closest.
+  const target=cars.reduce((a,b)=>a.position.distanceTo(police.car.position)<b.position.distanceTo(police.car.position)?a:b);
+  if(police.update(dt,target)==='caught'){
+    sfx.nicked();phone.haptic(HAPTICS.nicked);report.log('nicked');
+    missions.money=Math.max(0,missions.money-5);missions.refreshMoney();
+    missions.showBanner('NICKED!','The Met got you · -£5','failed');
+    warp.clearWanted();police.stop();
+    return;
+  }
+  // Police car drove into a giant roadblock -> stuck -> chase over!
+  if(!police.blocked&&roadblocks.touching(police.car.position)){
+    police.blocked=true;sfx.crash();warp.clearWanted();
+    missions.showBanner('POLICE BLOCKED!','The Met is stuck behind your giant weapon','passed');
+    setTimeout(()=>police.stop(),6000);
+  }
+  // Phone buzzes like a heartbeat when the police are close.
+  if((policeNearTick-=dt)<0&&police.car.position.distanceTo(target.position)<25){policeNearTick=1;phone.haptic(HAPTICS.policeNear);}
+}
+
+// F (P1) or / (P2) or the phone's 💥 button: throw your scanned weapon as a GIANT roadblock.
+function throwWeapon(who){
+  const c=who===1&&split.on?split.car2:car;
+  if(roadblocks.throwFrom(c)){sfx.throw();phone.haptic(HAPTICS.throw);showToast('💥 Weapon thrown!');}
+  else showToast('No weapon - scan something with the phone first 📷');
 }
 
 // G: turn 2-player split screen on/off (P1 is put in their car).

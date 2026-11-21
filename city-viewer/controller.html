@@ -17,13 +17,14 @@
   #knob { position:absolute; top:50%; left:50%; width:84px; height:84px; margin:-42px 0 0 -42px; border-radius:50%;
           background:var(--orange); display:grid; place-items:center; padding:8px; font-weight:900; color:var(--bg); font-size:15px; }
   #steer .hint { position:absolute; bottom:12px; width:100%; text-align:center; color:#8e9ab5; font-size:13px; }
-  #buttons { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:2fr 1fr; gap:12px; background:none; border:none; }
+  #buttons { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:2fr 1fr 1fr; gap:12px; background:none; border:none; }
   .btn { border-radius:18px; border:1px solid var(--line); background:var(--panel); display:grid; place-items:center; padding:10px 12px; text-align:center;
          font-weight:900; font-size:22px; letter-spacing:.06em; color:var(--text); }
   .btn.down { filter:brightness(1.7); transform:scale(.97); }
   #gas { background:#1f6b3a; grid-row:1; grid-column:2; }
   #brake { background:#7a1f22; grid-row:1; grid-column:1; }
   #hand { font-size:16px; }
+  #throw { grid-column:1 / span 2; background:#ff8c1a; color:var(--bg); font-size:18px; }
   #act { background:var(--blue); color:var(--bg); font-size:16px; }
   #scan-prompt { position:fixed; inset:0; z-index:4; display:none; place-items:center; overflow-y:auto; background:rgba(5,7,13,.88); text-align:center; padding:20px; }
   #scan-prompt h2 { margin:0 0 6px; font-size:26px; font-weight:900; }
@@ -99,6 +100,7 @@
     <div class="btn" id="gas">GAS</div>
     <div class="btn" id="hand">HANDBRAKE</div>
     <div class="btn" id="act">E · CAR / BOX</div>
+    <div class="btn" id="throw">💥 THROW WEAPON</div>
   </div>
 </div>
 <script>
@@ -132,6 +134,9 @@ holdButton('hand', (d) => { state.handbrake = d; });
 const act = document.getElementById('act');
 act.addEventListener('pointerdown', () => { act.classList.add('down'); buzz(20); sendInput({ action: Date.now() }); });
 act.addEventListener('pointerup', () => act.classList.remove('down'));
+const thr = document.getElementById('throw');
+thr.addEventListener('pointerdown', () => { thr.classList.add('down'); buzz([30, 20, 60]); sendInput({ throw: Date.now() }); });
+thr.addEventListener('pointerup', () => thr.classList.remove('down'));
 
 // ---- Steering pad: finger position left/right = steer -1..1 ----
 const pad = document.getElementById('steer'), knob = document.getElementById('knob');

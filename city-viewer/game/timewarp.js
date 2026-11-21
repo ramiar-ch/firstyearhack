@@ -47,6 +47,13 @@ export class TimeWarp {
     this.onEvent('police');
   }
 
+  /** Police chase over (roadblock / caught): alert + siren off. */
+  clearWanted() {
+    this.wanted = false;
+    this.alert.style.display = 'none';
+    this.stopSiren();
+  }
+
   /** Flash, then swap between today and 1997. */
   warp() {
     if (!this.retro) this.onEvent('warp'); // only count trips TO 1997 (not the boot screen's trip back)
