@@ -20,12 +20,13 @@ export class PoliceCar {
     this.reverseTime = 0;
     this.blocked = false; // crashed into a roadblock
     this.gentle = false; // intro mission: chase close behind but never catch
+    this.boost = 1; // more wanted stars = faster police
   }
 
-  /** Appear ~45 m behind the target car and start chasing. */
-  start(target, freeSpot) {
+  /** Appear `back` m behind the target car (and `side` m to the side) and start chasing. */
+  start(target, freeSpot, back = 45, side = 0) {
     const f = target.forward();
-    const p = freeSpot(target.position.x - f.x * 45, target.position.z - f.z * 45);
+    const p = freeSpot(target.position.x - f.x * back - f.z * side, target.position.z - f.z * back + f.x * side);
     if (!this.car) {
       this.car = new DrivableCar(p.x, p.z, target.heading, this.blockedAt, 0xf2f4f8);
       this.lights = addLightBar(this.car.mesh);
@@ -65,7 +66,7 @@ export class PoliceCar {
     const want = Math.atan2(-dx, -dz);
     let diff = want - c.heading;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // -PI..PI
-    let input = { throttle: Math.abs(diff) > 1.2 ? 0.6 : 0.85, brake: 0, steer: THREE.MathUtils.clamp(diff * 2.5, -1, 1), handbrake: false };
+    let input = { throttle: Math.min(1, (Math.abs(diff) > 1.2 ? 0.6 : 0.85) * this.boost), brake: 0, steer: THREE.MathUtils.clamp(diff * 2.5, -1, 1), handbrake: false };
 
     // Stuck against a wall? Reverse for a second with the wheel turned the other way.
     const holding = this.gentle && dist < 12; // waiting behind you on purpose (intro mission)
