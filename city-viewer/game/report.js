@@ -27,14 +27,21 @@ export class PoliceReport {
       <p class="r-text">Contacting Snowflake Cortex…</p><div class="r-foot"></div><div class="r-close">Press K to close</div></div>`;
     document.body.appendChild(this.overlay);
 
-    let text = null, source = '❄ Written live by Snowflake Cortex from this match';
+    let text = null, log = null, source = '❄ Summarised live by Snowflake Cortex (AI_SUMMARIZE_AGG) from this match';
     try {
       const res = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(stats) });
-      text = (await res.json()).text;
+      ({ text, log } = await res.json());
     } catch { /* server offline */ }
-    if (!text) { text = backupReport(stats); source = 'Offline backup report (Snowflake not connected)'; }
+    if (!text) { text = backupReport(stats); log = null; source = 'Offline backup report (Snowflake not connected)'; }
     if (!this.overlay) return; // closed while waiting
     this.overlay.querySelector('.r-text').textContent = text;
+    // The incident log Snowflake summarised, in small print underneath.
+    if (log) {
+      const ul = document.createElement('ul');
+      ul.className = 'r-log';
+      for (const line of log.slice(1)) { const li = document.createElement('li'); li.textContent = line; ul.appendChild(li); }
+      this.overlay.querySelector('.r-text').after(ul);
+    }
     this.overlay.querySelector('.r-foot').textContent = source;
     speak(text);
   }

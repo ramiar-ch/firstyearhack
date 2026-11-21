@@ -70,10 +70,10 @@ function handle(req, res, port) {
   if (req.method === 'POST' && url.pathname === '/api/report') {
     // Game finished: ask Snowflake Cortex for the police report (null = use the backup).
     readJson(req, async (stats) => {
-      let text = null, error = null;
-      try { text = await writePoliceReport(stats || {}); } catch (e) { error = e.message; console.log('Snowflake:', error); }
+      let result = null, error = null;
+      try { result = await writePoliceReport(stats || {}); } catch (e) { error = e.message; console.log('Snowflake:', error); }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ text, error }));
+      res.end(JSON.stringify({ text: result && result.text, log: result && result.log, error }));
     });
     return true;
   }
