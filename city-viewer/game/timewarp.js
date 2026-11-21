@@ -1,10 +1,4 @@
-// game/timewarp.js - escape the police by warping to 1997 in a red phone box.
-//
-//  1. Crash the car -> POLICE ALERT (flashing blue/red HUD + siren beeps).
-//  2. Get to the glowing red phone box near KCL and press E.
-//  3. Flash! -> 1997 MODE: chunky pixels, CRT scanlines, top-down camera,
-//     and the police are gone ("The 1997 Met has never heard of you").
-//  4. Use the phone box again (or press R) to warp back to today.
+// Phone-box escape, police alert and automatic 1997 visuals.
 
 import * as THREE from 'three';
 
@@ -14,19 +8,20 @@ export class TimeWarp {
    * setPixelRatio(r): makes the renderer draw at a lower/higher resolution.
    * onRetroChange(isRetro): lets the game switch camera etc.
    */
-  constructor(scene, x, z, { setPixelRatio, getPixelRatio, onRetroChange }) {
+  constructor(scene, x, z, { setPixelRatio, getPixelRatio, onRetroChange, patrol }) {
+    this.patrol = patrol;
     this.setPixelRatio = setPixelRatio;
     this.getPixelRatio = getPixelRatio;
     this.onRetroChange = onRetroChange;
     this.retro = false;
-    this.wanted = false;
+    this.wanted = null;
     this.position = new THREE.Vector3(x, 0, z);
     this.box = buildPhoneBox();
     this.box.position.copy(this.position);
     scene.add(this.box);
 
     // HUD bits: police alert, white flash, CRT scanlines.
-    this.alert = addDiv('police-alert', '★ POLICE ALERT ★<small>Hide in the red phone box!</small>');
+    this.alert = addDiv('police-alert', '★ POLICE ALERT ★<small>Patrol inbound · Escape at the red phone box</small>');
     this.flash = addDiv('warp-flash', '');
     this.crt = addDiv('crt', '');
     this.siren = null;
@@ -38,42 +33,46 @@ export class TimeWarp {
     return Math.hypot(pos.x - this.position.x, pos.z - this.position.z) < distance;
   }
 
-  /** Called after a crash: the police are after you (not in 1997!). */
-  raiseWanted() {
-    if (this.wanted || this.retro) return;
-    this.wanted = true;
+  /** Track the driver who triggered this pursuit. */
+  raiseWanted(driver, position) {
+    if (this.wanted) return;
+    this.patrol.dispatch(position);
+    this.wanted = driver;
     this.alert.style.display = 'block';
     this.startSiren();
     this.onEvent('police');
   }
 
-  /** Flash, then swap between today and 1997. */
-  warp() {
+  /** End the chase when the player escapes. */
+  escape() {
+    if (!this.wanted) return;
     this.onEvent('warp');
     this.flash.classList.remove('go');
     void this.flash.offsetWidth; // restart the CSS animation
     this.flash.classList.add('go');
-    setTimeout(() => this.setRetro(!this.retro), 250); // swap while the screen is white
+    this.wanted = null;
+    this.patrol.mesh.visible = false;
+    this.alert.style.display = 'none';
+    this.stopSiren();
   }
 
   setRetro(on) {
+    if (this.retro === on) return;
     this.retro = on;
     document.body.classList.toggle('retro', on);
     if (on) {
       // Draw at ~320 pixels wide, then the browser blows it up with sharp pixels.
       this.normalRatio = this.getPixelRatio();
       this.setPixelRatio(320 / innerWidth);
-      // The 1997 police have never heard of you.
-      this.wanted = false;
-      this.alert.style.display = 'none';
-      this.stopSiren();
     } else {
       this.setPixelRatio(this.normalRatio ?? 1);
     }
     this.onRetroChange(on);
   }
 
-  update() {
+  update(dt, missionActive, target) {
+    this.setRetro(missionActive || Boolean(this.wanted));
+    if (this.wanted) this.patrol.update(dt, target);
     // Phone box beam pulses, brighter while the police are after you.
     const beam = this.box.userData.beam;
     beam.material.opacity = (this.wanted ? 0.55 : 0.25) + Math.sin(performance.now() / 200) * 0.1;

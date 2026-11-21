@@ -20,7 +20,7 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 
 The opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
 
-Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. Crashes in the Strand cars trigger a police alert. Press E near the red phone box (Enter for P2) to switch to 1997, or use R in Strand car or Walk mode.
+Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. A hard crash in either Strand car dispatches a flashing patrol car to chase the driver along the streets. Escape at the red phone box with E (Enter for P2), or press R in Strand car or Walk mode. Pickups, deliveries and police pursuits automatically activate 1997 mode. The normal view returns when both the job and the chase are over.
 
 Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. The phone controls P2 in two-car mode.
 

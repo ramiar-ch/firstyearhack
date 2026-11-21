@@ -125,8 +125,20 @@ export class DrivableCar {
 
     // Blocked: try sliding along the wall in just x or just z.
     const impact = this.velocity.length();
-    if (!this.hits(p.x + dx, p.z, h)) { p.x += dx; this.velocity.z *= -0.2; this.velocity.multiplyScalar(0.97); return false; }
-    if (!this.hits(p.x, p.z + dz, h)) { p.z += dz; this.velocity.x *= -0.2; this.velocity.multiplyScalar(0.97); return false; }
+    if (!this.hits(p.x + dx, p.z, h)) {
+      const crashed = Math.abs(this.velocity.z) > 5;
+      p.x += dx;
+      this.velocity.z *= -0.2;
+      this.velocity.multiplyScalar(0.97);
+      return crashed;
+    }
+    if (!this.hits(p.x, p.z + dz, h)) {
+      const crashed = Math.abs(this.velocity.x) > 5;
+      p.z += dz;
+      this.velocity.x *= -0.2;
+      this.velocity.multiplyScalar(0.97);
+      return crashed;
+    }
 
     // Head-on: stop and bounce back a little.
     this.velocity.multiplyScalar(-0.25);
@@ -137,7 +149,7 @@ export class DrivableCar {
 }
 
 // ---- The car's 3D model: boxes + cylinders (original design) ---------------
-function buildCarMesh(colour) {
+export function buildCarMesh(colour) {
   const car = new THREE.Group();
   const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.35, metalness: 0.5 });
   const dark = new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.6 });
