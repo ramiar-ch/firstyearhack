@@ -6,3 +6,4 @@ dist-ssr
 .idea/workspace.xml
 *.log
 .DS_Store
+.env.*
