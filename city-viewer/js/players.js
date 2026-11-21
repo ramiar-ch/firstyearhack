@@ -156,20 +156,22 @@ export function ensureBody(p) {
   if (!ctx || !ctx.pedGeo || !ctx.crowdMaterial || !ctx.scene) return;
   if (p.body) return p.body;
 
-  const geo = ctx.pedGeo().clone();
-  const aW = new Float32Array(2);
+  const geo = ctx.pedGeo();
+  const aW = new Float32Array(3);
   const aS = new Float32Array(3);
   aS[0] = 0.96;
   aS[1] = 0.78;
   aS[2] = 0.65;
   aW[0] = 0;
   aW[1] = Math.random() * 6.28;
-  geo.setAttribute('aW', new THREE.InstancedBufferAttribute(aW, 2));
-  geo.setAttribute('aS', new THREE.InstancedBufferAttribute(aS, 3));
+  geo.setAttribute('walk', new THREE.InstancedBufferAttribute(aW, 3));
+  geo.setAttribute('trousers', new THREE.InstancedBufferAttribute(new Float32Array([0.1, 0.12, 0.16]), 3));
+  geo.setAttribute('skin', new THREE.InstancedBufferAttribute(aS, 3));
 
   const mesh = new THREE.InstancedMesh(geo, ctx.crowdMaterial, 1);
   mesh.frustumCulled = false;
   mesh.castShadow = true;
+  mesh.customDepthMaterial = ctx.crowdDepth;
   mesh.receiveShadow = true;
   mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   mesh.setColorAt(0, _c.setHex(p.colour));
@@ -212,7 +214,7 @@ export function updateBody(p) {
   const spd = Math.hypot(p.vel.x, p.vel.z);
   if (p.aW) {
     p.aW[0] = spd < 0.05 ? 0 : spd * 5.2;
-    p.body.geometry.attributes.aW.needsUpdate = true;
+    p.body.geometry.attributes.walk.needsUpdate = true;
   }
   _q.setFromAxisAngle(UP, p.yaw + Math.PI);
   _p.set(p.pos.x, p.pos.y, p.pos.z);
