@@ -119,6 +119,14 @@
   body.split #side{display:none} /* the Places panel would cover P2's view */
   body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:3px;margin-left:-1px;background:#05070d;z-index:3;pointer-events:none}
   .hidden-ui #twop-btn,.hidden-ui #speedo2{display:none!important}
+  /* Police report from Snowflake (game/report.js) */
+  #report{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(5,7,13,.7)}
+  #report .r-card{width:min(620px,92vw);background:#f4f1e8;color:#1a1a1a;border-radius:6px;padding:22px 26px;font-family:"Courier New",monospace}
+  #report .r-head{font:900 18px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.06em;color:#0b2a6b;border-bottom:3px solid #0b2a6b;padding-bottom:8px}
+  #report .r-ref{font-size:13px;color:#555;margin:8px 0 12px}
+  #report .r-text{font-size:16px;line-height:1.5;white-space:pre-wrap;margin:0 0 14px}
+  #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
+  #report .r-close{margin-top:10px;font-size:13px;color:#666}
 </style>
 </head>
 <body>
@@ -193,6 +201,7 @@ import { MissionManager } from './game/missions.js';
 import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
+import { PoliceReport } from './game/report.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1057,7 +1066,7 @@ function setupUI(){
   addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
     keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
-    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyK'&&!e.repeat&&report&&!report.hide())report.show(missions.money); /* K = end match: Snowflake police report */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1116,6 +1125,8 @@ let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
+let report=null;     // end-of-match police report from Snowflake Cortex (PoliceReport)
+const DEMO=new URLSearchParams(location.search).get('demo')==='1'; // ?demo=1 = Demo Mode
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
 let nearCarShown=false;
@@ -1156,7 +1167,7 @@ function updateDrive(dt){
   const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
-  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();} // crash = police alert
+  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);warp.raiseWanted();} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
@@ -1209,8 +1220,12 @@ function startMissions(){
   phone.onPhonesChange=n=>{if(n>0&&!split.on&&!intro)toggleSplit();};
   const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
   twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
-  missions.onEvent=e=>phone.haptic(HAPTICS[e]);
-  warp.onEvent=e=>phone.haptic(HAPTICS[e]);
+  // Everything that happens: buzz the phone + remember it for the Snowflake police report.
+  report=new PoliceReport();
+  missions.onEvent=(e,who)=>{phone.haptic(HAPTICS[e]);report.log(e,who);};
+  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
+  // Demo Mode (?demo=1): the first job is always this short, safe one.
+  if(DEMO)missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'a box of KCL exam papers'}];
   // Handy for debugging: type `game` in the browser console (F12).
   window.game={car,missions,player,setMode};
 }
@@ -1219,7 +1234,7 @@ function updateMissions(dt){
   const active=!intro&&(mode==='drive'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='drive'?car.position:player.pos;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);warp.raiseWanted();}
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   warp.update();
@@ -1243,7 +1258,7 @@ function p2Action(){
 // The 3-second swoop from high above London down to the car at KCL.
 // Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
 function startIntro(){
-  const done=()=>{intro=null;setMode('drive');};
+  const done=()=>{intro=null;setMode('drive');if(DEMO)phone.toggleQr();}; // Demo Mode: QR code pops up for the judge
   if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
   controls.enabled=false;
   intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done);

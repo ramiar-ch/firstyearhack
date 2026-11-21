@@ -8,6 +8,7 @@
 // GET /api/info tells the game this laptop's Wi-Fi address (for the QR code).
 
 const os = require('os');
+const { writePoliceReport } = require('./snowflake.js');
 
 const clients = { game: new Set(), phone: new Set() };
 
@@ -63,6 +64,16 @@ function handle(req, res, port) {
       }
       res.writeHead(204);
       res.end();
+    });
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/report') {
+    // Game finished: ask Snowflake Cortex for the police report (null = use the backup).
+    readJson(req, async (stats) => {
+      let text = null, error = null;
+      try { text = await writePoliceReport(stats || {}); } catch (e) { error = e.message; console.log('Snowflake:', error); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text, error }));
     });
     return true;
   }

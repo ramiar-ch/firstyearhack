@@ -91,6 +91,13 @@ export class MissionManager {
   newJob(pos) {
     this.item = ITEMS[Math.floor(Math.random() * ITEMS.length)];
     this.pickup = this.pickPlace(pos.x, pos.z, 120, 500, null);
+    // Demo Mode: use the planned job instead of a random one (see `script`).
+    const planned = this.script && this.script.shift();
+    if (planned) {
+      this.pickup = this.places.find((p) => p.name === planned.pickup) ?? this.pickup;
+      this.plannedDropoff = this.places.find((p) => p.name === planned.dropoff);
+      if (planned.item) this.item = planned.item;
+    }
     this.dropoff = null;
     this.state = 'pickup';
     placeBeam(this.pickupBeam, this.pickup);
@@ -99,10 +106,12 @@ export class MissionManager {
   }
 
   collect() {
-    this.dropoff = this.pickPlace(this.pickup.x, this.pickup.z, 250, 800, this.pickup);
+    this.dropoff = this.plannedDropoff ?? this.pickPlace(this.pickup.x, this.pickup.z, 250, 800, this.pickup);
     const dist = Math.hypot(this.dropoff.x - this.pickup.x, this.dropoff.z - this.pickup.z);
-    // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit.
-    this.timeLeft = Math.ceil((dist / 9 + 20) / 5) * 5;
+    // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit
+    // (planned demo jobs get extra time so nobody fails on stage).
+    this.timeLeft = Math.ceil((dist / 9 + (this.plannedDropoff ? 60 : 20)) / 5) * 5;
+    this.plannedDropoff = null;
     this.state = 'dropoff';
     this.pickupBeam.visible = false;
     placeBeam(this.dropoffBeam, this.dropoff);
@@ -115,7 +124,7 @@ export class MissionManager {
     this.dropoffBeam.visible = false;
     this.state = 'waiting';
     this.wait = NEXT_JOB_DELAY;
-    this.onEvent(success ? 'passed' : 'failed');
+    this.onEvent(success ? 'passed' : 'failed', who);
     if (success) {
       this.money += REWARD;
       this.moneyBy[who] += REWARD;

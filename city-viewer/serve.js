@@ -18,6 +18,8 @@ const types = {
 http.createServer((req, res) => {
   if (relay.handle(req, res, port)) return; // game addition
   const urlPath = decodeURIComponent(req.url.split('?')[0]);
+  // game addition: never serve hidden files like .env (it holds the Snowflake token!)
+  if (urlPath.split('/').some((part) => part.startsWith('.'))) { res.writeHead(403); return res.end(); }
   let file = path.normalize(path.join(root, urlPath === '/' ? 'index.html' : urlPath));
   if (!file.startsWith(root)) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
