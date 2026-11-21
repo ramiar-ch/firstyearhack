@@ -3,9 +3,11 @@
 
 import * as THREE from 'three';
 import { isDown, type KeyMap } from './input';
+import type { CollisionWorld } from '../world/collision';
 
 const WALK_SPEED = 5; // metres per second
 const RUN_SPEED = 10;
+const RADIUS = 0.8; // collision circle (the capsule is drawn 2x size)
 
 export class Character {
   readonly mesh = new THREE.Group();
@@ -35,7 +37,7 @@ export class Character {
     this.mesh.add(nose);
   }
 
-  update(dt: number) {
+  update(dt: number, world: CollisionWorld) {
     // Build a direction from the keys. The camera always looks north,
     // so "up" on screen = north = -z.
     const dir = new THREE.Vector3();
@@ -54,7 +56,8 @@ export class Character {
       this.velocity.set(0, 0, 0);
     }
 
-    // NOTE: no building collisions yet - that's Step 2.
     this.mesh.position.addScaledVector(this.velocity, dt);
+    // Don't walk through buildings.
+    world.resolveCircle(this.mesh.position, RADIUS);
   }
 }
