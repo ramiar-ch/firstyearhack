@@ -1238,7 +1238,10 @@ function startMissions(){
   twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
   // Everything that happens: buzz the phone + remember it for the Snowflake police report.
   report=new PoliceReport();
-  missions.onEvent=(e,who)=>{phone.haptic(HAPTICS[e]);report.log(e,who);};
+  missions.onEvent=(e,who)=>{
+    if(e==='escape'){warp.raiseWanted();return;} // intro mission: police chase starts at the pickup
+    phone.haptic(HAPTICS[e]);report.log(e,who);
+  };
   warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
@@ -1251,8 +1254,11 @@ function startMissions(){
       phone.haptic(HAPTICS.pickup);
     }catch(e){showToast('Scan failed - try again');}
   };
-  // Demo Mode (?demo=1): the first job is always this short, safe one.
-  if(DEMO)missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'a box of KCL exam papers'}];
+  // INTRO MISSION "Exam Paper Heist" (always the first job): grab the KCL exam
+  // papers at Bush House -> the police come -> hide in the red phone box
+  // (= warp to 1997) -> deliver to Somerset House in 1997.
+  missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'the stolen KCL exam papers',
+    escape:{name:'red phone box',x:warp.position.x,z:warp.position.z,done:()=>warp.retro}}];
   // Handy for debugging: type `game` in the browser console (F12).
   window.game={car,missions,player,setMode};
 }
