@@ -20,11 +20,11 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 
 After the loading artwork and 1997 boot sequence, the opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
 
-Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. A hard crash in either Strand car dispatches a flashing patrol car to chase the driver along the streets. Escape at the red phone box with E (Enter for P2), or press R in Strand car or Walk mode. Pickups, deliveries and police pursuits automatically activate 1997 mode. The normal view returns when both the job and the chase are over.
+Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. A hard crash in either Strand car adds a wanted star. Up to three patrol cars chase the drivers along the streets. Escape at the red phone box with E (Enter for P2), or press R in Strand car or Walk mode. Pickups, deliveries and police pursuits automatically activate 1997 mode. The normal view returns when both the job and the chase are over.
 
-Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. Connecting a phone starts two-car mode and assigns the phone to P2. The scanner on the controller turns a photo into a paper cut-out carried by the player.
+Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. Connecting a phone starts two-car mode and assigns the phone to P2. The scanner on the controller turns a photo into an item the player carries. Press F for P1, / for P2, or Throw on the phone to drop a giant roadblock.
 
-The first mission is the Exam Paper Heist. Collect the papers at Bush House, escape the patrol at the red phone box, and deliver them to Somerset House. Open `?demo=1` to show the controller QR code after the intro. Press K for a spoken incident report. To enable live Snowflake reports, copy `city-viewer/.env.example` to `city-viewer/.env` and fill in your Snowflake settings. The report has a local fallback.
+The first mission is the Exam Paper Heist. Collect the papers at Bush House, lose the patrol, and deliver them to Somerset House. Dispatch gives spoken directions at each stage. Open `?demo=1` to show the controller QR code after the intro. Press K for a spoken incident report. To enable live Snowflake reports, copy `city-viewer/.env.example` to `city-viewer/.env` and fill in your Snowflake settings. The report has a local fallback.
 
 T runs/pauses time, H hides the UI, and clicking the minimap moves you there.
 
@@ -38,6 +38,8 @@ Teal dots on the minimap mark shared bicycle stations. Select a station in Orbit
 
 - **Real (OpenStreetMap):** street layout and names, one-way streets, bus lanes, building footprints and heights/storeys where tagged, the Thames, bridges, rail viaducts, parks, street trees, and the positions of traffic lights, crossings, bus stops, phone boxes, post boxes, benches and Tube entrances.
 - **Generated:** facades of ordinary buildings (London styles: Portland stone, Victorian red brick, Georgian stock brick, stucco, glass, concrete, warehouse), shopfronts, mansard roofs, chimneys, tree species (London plane, lime, birch, conifer), vehicles including classic Routemaster-style double-deckers, cyclists, shared bicycle stations, and pedestrians of different ages. Heights are estimated where OSM has none. The ground is flat.
+
+The Places menu frames the detailed landmark models. Elizabeth Tower's four dials follow the viewer clock, and Somerset House's courtyard fountains animate in close views. Architectural references include [UK Parliament](https://virtualtours-assets.parliament.uk/elizabeth-tower/index.html), [St Paul's Cathedral](https://www.stpauls.co.uk/wren-office-drawings), [Somerset House](https://www.somersethouse.org.uk/venue-hire/our-spaces/the-edmond-j-safra-fountain-court), and the Historic England listings for [Bush House](https://historicengland.org.uk/listing/the-list/list-entry/1066492) and the [Royal Courts of Justice](https://historicengland.org.uk/listing/the-list/list-entry/1264258).
 
 ## Collisions and modding
 
@@ -78,6 +80,7 @@ window.addEventListener('cityworld-ready', () => {
 - `index.html` — the viewer
 - `city-models.js` — vehicle, rider and pedestrian geometry
 - `city-traffic.js` — vehicle footprints, collision queries and motion checks
+- `city-landmarks.js` — landmark geometry and animations
 - `city-data.js` — processed OSM data (~5.5 MB)
 - `serve.js` — tiny static server
 - `tools/` — scripts to rebuild `city-data.js`
