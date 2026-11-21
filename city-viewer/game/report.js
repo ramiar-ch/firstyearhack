@@ -72,6 +72,7 @@ function backupReport(s) {
   return `At approximately 02:00 hours, officers observed a vehicle conducting "deliveries" along the Strand. ` +
     `The driver collided with the architecture of central London ${crashes} time${crashes === 1 ? '' : 's'}, ` +
     `including what witnesses describe as "most of Bush House".` +
+    (s.offGridSeconds > 1 ? ` For ${Math.round(s.offGridSeconds)} seconds there are no records of the suspect at all.` : '') +
     (s.warpsTo1997 ? ` When pursued, the suspect entered a red telephone box and vanished. A colleague reports the suspect reappeared in 1997. Enquiries are ongoing.` : ` The suspect was last seen heading towards King's College, muttering about deadlines.`) +
     ` Total earnings: £${s.money}. Recommended action: a stern talking-to and a cup of tea.`;
 }

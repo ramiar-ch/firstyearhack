@@ -29,6 +29,8 @@ function incidentLog(s) {
   }
   if (s.policeAlerts) at('Police alert raised. Sirens deployed along the Strand.');
   if (s.warpsTo1997) at('A suspect entered a red telephone box and vanished. A witness insists the suspect reappeared in 1997.');
+  // Data blackout: nothing is recorded while the player is in 1997 (no CCTV, no data).
+  if (s.offGridSeconds > 1) at(`No CCTV or data records exist for ${Math.round(s.offGridSeconds)} seconds of this incident. Officially, the suspect was nowhere.`);
   at(`Total earnings recovered: ${s.money || 0} pounds. Enquiries ongoing. The sergeant requests a cup of tea.`);
   return lines;
 }

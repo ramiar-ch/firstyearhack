@@ -58,6 +58,19 @@ function noise(len, vol = 0.3, filterFreq = 800, delay = 0) {
 }
 
 export const sfx = {
+  /** 90s dial-up modem: dialling beeps, answer tone, handshake warble, the famous screech. */
+  dialup() {
+    [[697, 1209], [770, 1336], [852, 1477], [941, 1336], [697, 1336], [770, 1477]]
+      .forEach(([a, b], i) => { tone(a, 0.09, 'sine', i * 0.12, 0.12); tone(b, 0.09, 'sine', i * 0.12, 0.12); });
+    const t = 0.85;
+    tone(2100, 0.5, 'sine', t, 0.1);
+    tone(1200, 0.25, 'square', t + 0.55, 0.06, 2400);
+    tone(2400, 0.25, 'square', t + 0.8, 0.06, 1000);
+    noise(0.9, 0.18, 6000, t + 1.05);
+    tone(1800, 0.9, 'sawtooth', t + 1.05, 0.05, 600);
+  },
+  /** British phone ring (double ring). */
+  ring() { [0, 0.6].forEach((d) => { tone(400, 0.4, 'sine', d, 0.1); tone(450, 0.4, 'sine', d, 0.1); }); },
   crash() { noise(0.45, 0.6, 500); tone(90, 0.3, 'sine', 0, 0.3, 40); },
   pickup() { tone(660, 0.12); tone(990, 0.2, 'square', 0.1); },
   passed() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'square', i * 0.12, 0.13)); },

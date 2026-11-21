@@ -164,6 +164,10 @@
     padding:10px 16px;border-radius:12px;background:rgba(234,243,255,.95);color:#05070d;border:2px solid #29b5e8}
   #dispatch .d-head{font:900 13px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.12em;color:#1279a8;margin-bottom:4px}
   #dispatch .d-text{font:700 17px/1.35 "Segoe UI",system-ui,sans-serif}
+  /* 1997 = no GPS: the minimap and direction arrow disappear */
+  body.retro #mapwrap,body.retro #mission .m-arrow{display:none!important}
+  body.retro::after{content:"📟 1997 · NO GPS · NO CCTV";position:fixed;right:14px;bottom:14px;z-index:16;padding:6px 12px;
+    background:#141a10;color:#a8c66c;border:2px solid #a8c66c;font:700 14px/1.2 "Courier New",monospace;pointer-events:none}
   #dispatch.pager{background:#a8c66c;color:#1c2b10;border-color:#3a4a2a}
   #dispatch.pager .d-head{color:#1c2b10}
   #dispatch.pager .d-text{font-family:"Courier New",monospace;letter-spacing:.04em}
@@ -255,6 +259,7 @@ import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
 import { buildPatrolRoads } from './game/police.js';
 import { TimeWarp } from './game/timewarp.js';
+import { Music } from './game/music.js';
 import { Eras } from './game/eras.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
@@ -2008,6 +2013,7 @@ function setupUI(){
       if(e.code==='KeyR'&&(mode==='strand'||mode==='walk'))warp.escape();
       if(e.code==='KeyK'&&report&&!report.hide())report.show(missions.money);
       if(e.code==='KeyP')phone.toggleQr();
+      if(e.code==='KeyM'&&music)showToast(music.toggle()?'📻 Strand FM':'Music off');
       if(e.code==='KeyG')toggleSplit();
       if(e.code==='Enter')p2Action();
       if(e.code==='KeyF'&&(mode==='strand'||mode==='walk'))throwWeapon(0);
@@ -2199,6 +2205,8 @@ function buildRain(){const N=2600,P=new Float32Array(N*6),E=new Float32Array(N*2
    ========================================================= */
 let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
+let music=null;      // Strand FM: modern in 2026, chiptune in 1997 (Music)
+let ringT=0;         // phone box ringing timer
 let eras=null;       // 1997 vs 2026 London: bollards on the Strand, London Eye (Eras)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
@@ -2233,7 +2241,8 @@ function parkStrandCar(){
     setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
     onRetroChange:on=>{
       driveCam.view=split.cam2.view=on?'overhead':'chase';
-      if(eras)eras.set(on?1997:2026); // bollards vanish, no London Eye in 1997
+      if(eras)eras.set(on?1997:2026);
+      if(music)music.retro=on; // soundtrack switches era // bollards vanish, no London Eye in 1997
       if(!intro&&!boot)showToast(on?'📟 1997 · no CCTV, no GPS · you can\x27t be tracked':'📡 2026 · CCTV + Snowflake online · you can be tracked');
       fetch('/api/phone-message',{method:'POST',headers:{'Content-Type':'application/json'},
         body:JSON.stringify(on?{text:'PG: 1997 MODE. NO CCTV. NO GPS. YOU ARE INVISIBLE.',pager:true}:{text:'Back in 2026. GPS and Snowflake online - the Met can see you.',pager:false})}).catch(()=>{});
@@ -2245,7 +2254,7 @@ function parkStrandCar(){
   eras=new Eras(scene,{x:bf.px,z:bf.pz,ax:-bf.tz,az:bf.tx,halfWidth:9},EYE?EYE.wheel.parent:null);
   // Warped to 1997 in the middle of a chase: the police lose you.
   warp.onLost=()=>{
-    wanted.clear();sfx.warp();
+    wanted.clear();
     missions.showBanner('NO CCTV IN 1997','Suspect lost · the Met can\x27t track you here','passed');
   };
 }
@@ -2271,7 +2280,7 @@ function updateStrandCar(dt){
   const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
-  if(car.update(dt,input)){showToast(i18n('crash'));sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);addStar(0);} // crash = police alert
+  if(car.update(dt,input)){showToast(i18n('crash'));sfx.crash();if(phone)phone.haptic(HAPTICS.crash);if(!warp.retro)report.log('crash',0);addStar(0);} // 1997: nothing gets recorded // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
@@ -2342,7 +2351,10 @@ function startMissions(){
     phone.haptic(HAPTICS[e]);report.log(e,who);
     if(sfx[e])sfx[e](); // pickup / passed / failed sounds
   };
-  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);if(e==='warp')sfx.warp();};
+  // Warping TO 1997 plays a 90s dial-up modem; coming back plays the whoosh.
+  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);if(e==='warp'){if(!warp.retro)sfx.dialup();else sfx.warp();}};
+  music=new Music();
+  addEventListener('keydown',()=>{if(music.ctx)music.ctx.resume();});
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
   // P2 in split screen, otherwise P1.
@@ -2378,12 +2390,17 @@ function updateMissions(dt){
   const active=!intro&&(mode==='strand'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='walk'?player.pos:car.position;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);addStar(1);}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){sfx.crash();if(phone)phone.haptic(HAPTICS.crash);if(!warp.retro)report.log('crash',1);addStar(1);}
   updatePolice(dt);
   sfx.engine(car.speed,mode==='strand'&&!intro,warp.retro); // engine hum
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   if(!intro)warp.update(missions.state!=='waiting');
+  if(!intro&&!music.playing&&!music.started){music.started=true;music.start();} // Strand FM starts after the intro
+  // The phone box RINGS when the police are after you and you're close: pick up to escape.
+  if(warp.wanted&&!warp.retro&&warp.near(mode==='strand'?car.position:player.pos,45)&&(ringT-=dt)<0){ringT=2.4;sfx.ring();}
+  // Data blackout: time spent in 1997 leaves no records (shows up in the Snowflake report).
+  if(warp.retro&&!intro)report.stats.offGridSeconds=(report.stats.offGridSeconds||0)+dt;
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
   document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
 }
