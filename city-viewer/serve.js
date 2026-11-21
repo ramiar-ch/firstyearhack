@@ -23,4 +23,4 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
     res.end(data);
   });
-}).listen(port, () => console.log(`溪谷村已启动: http://localhost:${port}`));
+}).listen(port, () => console.log(`Strand City Viewer: http://localhost:${port}`));

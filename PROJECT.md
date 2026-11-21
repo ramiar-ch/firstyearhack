@@ -1,4 +1,10 @@
-# Strand Theft Auto (working title)
+# Running the project
+
+Run `npm start` or `npm run dev` from the repository root to start the Strand City Viewer at [localhost:8080](http://localhost:8080/). In IntelliJ IDEA, use the **Strand City Viewer** run configuration.
+
+To launch the driving game separately, run `npm --prefix client run dev` from the repository root.
+
+## Strand Theft Auto (working title)
 
 A browser driving game set at night on the real streets around King's College London's Strand campus. It is a retro remix of 1997-era top-down open-world driving games, rebuilt for 2026.
 
