@@ -85,7 +85,7 @@ export class PigeonMan {
    * Every frame. player = Vector3, target = {x, z} or null, active = in 1997 with a mission.
    * Returns true the first frame he appears (so the game can show a message).
    */
-  update(dt, player, target, active) {
+  update(dt, player, target, active, roadPoint = null) {
     this.time += dt;
     const show = active && !!target;
     const appeared = show && !this.shown;
@@ -98,7 +98,10 @@ export class PigeonMan {
     const dx = target.x - player.x, dz = target.z - player.z;
     const dist = Math.hypot(dx, dz);
     const lead = Math.min(LEAD, dist);
-    const goal = new THREE.Vector3(player.x + (dx / (dist || 1)) * lead, 0, player.z + (dz / (dist || 1)) * lead);
+    // Follow the ROAD route if we have one (never through buildings), else a straight line.
+    const goal = roadPoint
+      ? new THREE.Vector3(roadPoint.x, 0, roadPoint.z)
+      : new THREE.Vector3(player.x + (dx / (dist || 1)) * lead, 0, player.z + (dz / (dist || 1)) * lead);
     const toGoal = goal.clone().sub(this.root.position);
     const gap = toGoal.length();
     const speed = Math.min(gap * 3, 40); // sprints to catch up, slows down when he's there

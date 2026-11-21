@@ -224,10 +224,14 @@ export class MissionManager {
       this.state === 'pickup' ? `PICK UP · ${this.pickup.name}`
         : this.state === 'escape' ? `LOSE THE POLICE · ${this.escape.name} (E)`
         : `DELIVER · ${this.dropoff.name}`;
-    this.hud.querySelector('.m-sub').textContent = `${Math.round(dist2d(pos, target))} m · ${this.item}`;
+    // Road distance when we have a route (satnav style), otherwise straight-line.
+    const metres = this.steer ? this.steer.remaining : dist2d(pos, target);
+    this.hud.querySelector('.m-sub').textContent = `${Math.round(metres)} m · ${this.item}`;
 
     // Arrow: which way the target is, compared with where the camera looks.
-    const bearing = Math.atan2(target.x - pos.x, -(target.z - pos.z)); // 0 = north, clockwise
+    // Point along the ROAD route (25 m ahead) if we have one, so the arrow follows the streets.
+    const aim = this.steer ?? target;
+    const bearing = Math.atan2(aim.x - pos.x, -(aim.z - pos.z)); // 0 = north, clockwise
     this.hud.querySelector('.m-arrow').style.transform = `rotate(${bearing - cameraHeading}rad)`;
 
     const timer = this.hud.querySelector('.m-timer');
@@ -257,6 +261,15 @@ export class MissionManager {
     // Current target.
     const target = this.currentTarget();
     if (!target) return;
+    // The road route, drawn like a satnav line.
+    if (this.route) {
+      ctx.strokeStyle = this.state === 'pickup' ? '#ff8c1a' : this.state === 'escape' ? '#ff2a3a' : '#3a8bff';
+      ctx.lineWidth = 5;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      this.route.forEach(([x, z], i) => (i ? ctx.lineTo(toMap(x), toMap(z)) : ctx.moveTo(toMap(x), toMap(z))));
+      ctx.stroke();
+    }
     ctx.fillStyle = this.state === 'pickup' ? '#ff8c1a' : this.state === 'escape' ? '#ff2a3a' : '#3a8bff';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
