@@ -1,0 +1,1 @@
+[out:json][timeout:240];(node["natural"="tree"](51.4930,-0.1454,51.5300,-0.0866);node["highway"~"^(crossing|traffic_signals|bus_stop|street_lamp)$"](51.4930,-0.1454,51.5300,-0.0866);node["amenity"~"^(post_box|telephone|bench|waste_basket)$"](51.4930,-0.1454,51.5300,-0.0866);node["railway"="subway_entrance"](51.4930,-0.1454,51.5300,-0.0866););out qt;
