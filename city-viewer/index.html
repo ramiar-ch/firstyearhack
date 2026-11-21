@@ -61,6 +61,13 @@
   .lbl.kcl{background:#c8102e;border-color:#ff9aa8}
   .lbl:hover{background:#fff;color:#111}
   @media (max-width:760px){#side{width:210px;max-height:50vh}#help{display:none}#minimap{width:140px;height:140px}.modes button{padding:5px 6px}}
+  /* ---- Game additions: driving + intro (see game/*.js) ---- */
+  #speedo{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);display:none;pointer-events:none;
+    font:800 30px/1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.7)}
+  #speedo small{font-size:14px;font-weight:600;margin-left:4px;color:var(--muted)}
+  .intro-caption{position:fixed;left:50%;bottom:12%;transform:translateX(-50%);opacity:0;pointer-events:none;z-index:6;
+    font:800 clamp(20px,3.2vw,40px)/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.3em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);white-space:nowrap}
+  .hidden-ui #speedo{display:none!important}
 </style>
 </head>
 <body>
@@ -74,7 +81,9 @@
       <button data-mode="walk"><kbd>2</kbd><span data-i18n="modeWalk">Walk</span></button>
       <button data-mode="fly"><kbd>3</kbd><span data-i18n="modeFly">Fly</span></button>
       <button data-mode="drive"><kbd>4</kbd><span data-i18n="modeDrive">Drive</span></button>
+      <button data-mode="strand"><kbd>5</kbd><span data-i18n="strand">Strand car</span></button>
     </div>
+    <a href="/game/" data-i18n="twoPlayer" style="color:var(--text)">Two-player game</a>
     <button id="lang" title="Language / 语言">中文</button>
   </div>
   <div class="panel" id="side">
@@ -105,6 +114,7 @@
   <div class="panel" id="mapwrap"><canvas id="minimap" width="440" height="440"></canvas><div id="coords"><span id="cxy"></span><span id="calt"></span></div></div>
   <div id="street"></div>
   <div class="panel" id="drivehud"><span id="dhSpeed">0</span><small>km/h</small><span id="dhCar"></span></div>
+  <div id="speedo"></div>
   <div id="crosshair"></div>
   <div id="lockhint" data-i18n="lockHint">Click to lock the view (or hold the left button and drag) · Esc to release</div>
   <div id="fps">-- FPS</div>
@@ -128,6 +138,10 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { DrivableCar } from './game/car.js';
+import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
+import { IntroSwoop } from './game/intro.js';
+
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
 import * as ChaseCam from './js/chaseCam.js';
@@ -139,7 +153,9 @@ import { loadSettings, applyToSource } from './js/settings.js';
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
    ========================================================= */
 const I18N={
-  en:{docTitle:'London · Around KCL',loadTitle:'London · 2 km around KCL',brand:'London · Around KCL',modeOrbit:'Orbit',modeWalk:'Walk',modeFly:'Fly',modeDrive:'Drive',places:'Places',time:'Time',
+  en:{twoPlayer:'Two-player game',strand:'Strand car',helpStrand:'<b>Drive</b>　<span class="k">WASD/arrows</span> drive · <span class="k">Space</span> handbrake · <span class="k">E</span> get out · <span class="k">V</span> change view',
+    carIn:'In the car · E to get out',carOut:'On foot · E near the car to get in',carNear:'Press E to get in the car',crash:'Crash!',viewChase:'Chase view',viewOverhead:'Overhead view',
+    docTitle:'London · Around KCL',loadTitle:'London · 2 km around KCL',brand:'London · Around KCL',modeOrbit:'Orbit',modeWalk:'Walk',modeFly:'Fly',modeDrive:'Drive',places:'Places',time:'Time',
     sp1:'1 min / s',sp4:'4 min / s',sp20:'20 min / s',sp90:'1.5 h / s',display:'Display',optLife:'Traffic & people',optLabels:'Labels',optShadow:'Shadows',optBloom:'Night glow',optFog:'Haze',optMap:'Minimap',optRain:'Drizzle',
     look:'Look',lookLondon:'London mood',lookNatural:'Natural',
     helpDrive:'<b>Drive</b>　<span class="k">W/S</span> throttle / brake · <span class="k">A/D</span> steer · <span class="k">Space</span> handbrake · <span class="k">V</span> change vehicle · <span class="k">C</span> camera · <span class="k">R</span> back on road',
@@ -149,11 +165,13 @@ const I18N={
     helpOrbit:'<b>Orbit</b>　<span class="k">Left drag</span> rotate · <span class="k">Right drag</span> pan · <span class="k">Wheel</span> zoom · <span class="k">WASD</span> move · <span class="k">Q/E</span> turn',
     helpWalk:'<b>Walk</b>　<span class="k">Click</span> lock mouse · <span class="k">WASD</span> walk · <span class="k">Shift</span> jog · <span class="k">Space</span> jump · <span class="k">V</span> 1st/3rd person · <span class="k">[ ]</span> camera · <span class="k">Esc</span> release',
     helpFly:'<b>Fly</b>　<span class="k">WASD</span> move · <span class="k">Space/E</span> up · <span class="k">C/Q</span> down · <span class="k">Shift</span> faster · <span class="k">Wheel</span> speed',
-    helpCommon:'<span class="k">1-4</span> switch mode · <span class="k">T</span> run time · <span class="k">H</span> hide UI · click the minimap to go there',
+    helpCommon:'<span class="k">1-5</span> switch mode · <span class="k">T</span> run time · <span class="k">H</span> hide UI · click the minimap to go there',
     timeOn:'Time running',timeOff:'Time paused',flySpeed:v=>`Fly speed ${v} m/s`,fromKCL:v=>`${v} m from KCL`,
     joinHint:'Press A on a controller to join',leaveHint:'Hold Start to leave',paused:'paused',addBot:'Add bot',mappingWarn:'Press A — non-standard gamepad mapping',
     load1:'Reading street and building data…',load2:'Laying roads, the Thames and bridges…',load3:n=>`Building ${n} buildings…`,load4:'Planting trees, lamps and street furniture…',load5:'Releasing traffic and pedestrians…',done:'Done',loadFail:'Failed to load: '},
-  zh:{docTitle:'伦敦 · KCL 周边',loadTitle:'伦敦 · KCL 周边 2 km',brand:'伦敦 · KCL 周边',modeOrbit:'环绕视角',modeWalk:'街道漫步',modeFly:'自由飞行',modeDrive:'驾驶',places:'地点',time:'时间',
+  zh:{twoPlayer:'双人游戏',strand:'河岸街小车',helpStrand:'<b>驾驶</b>　<span class="k">WASD/方向键</span> 驾驶 · <span class="k">空格</span> 手刹 · <span class="k">E</span> 下车 · <span class="k">V</span> 切换视角',
+    carIn:'已上车 · 按 E 下车',carOut:'步行 · 靠近汽车按 E 上车',carNear:'按 E 上车',crash:'撞车！',viewChase:'追尾视角',viewOverhead:'俯视视角',
+    docTitle:'伦敦 · KCL 周边',loadTitle:'伦敦 · KCL 周边 2 km',brand:'伦敦 · KCL 周边',modeOrbit:'环绕视角',modeWalk:'街道漫步',modeFly:'自由飞行',modeDrive:'驾驶',places:'地点',time:'时间',
     sp1:'1 分钟/秒',sp4:'4 分钟/秒',sp20:'20 分钟/秒',sp90:'1.5 小时/秒',display:'画面',optLife:'行人车辆',optLabels:'地名标签',optShadow:'阴影',optBloom:'夜间泛光',optFog:'雾霭',optMap:'小地图',optRain:'毛毛雨',
     look:'风格',lookLondon:'伦敦情绪',lookNatural:'自然',
     helpDrive:'<b>驾驶</b>　<span class="k">W/S</span> 油门 / 刹车 · <span class="k">A/D</span> 转向 · <span class="k">空格</span> 手刹 · <span class="k">V</span> 换车 · <span class="k">C</span> 切换镜头 · <span class="k">R</span> 回到路上',
@@ -163,7 +181,7 @@ const I18N={
     helpOrbit:'<b>环绕视角</b>　<span class="k">左键</span> 旋转 · <span class="k">右键</span> 平移 · <span class="k">滚轮</span> 缩放 · <span class="k">WASD</span> 移动 · <span class="k">Q/E</span> 转向',
     helpWalk:'<b>街道漫步</b>　<span class="k">点击</span> 锁定鼠标 · <span class="k">WASD</span> 步行 · <span class="k">Shift</span> 小跑 · <span class="k">空格</span> 跳 · <span class="k">V</span> 第一/三人称 · <span class="k">[ ]</span> 镜头 · <span class="k">Esc</span> 释放',
     helpFly:'<b>自由飞行</b>　<span class="k">WASD</span> 移动 · <span class="k">空格/E</span> 上升 · <span class="k">C/Q</span> 下降 · <span class="k">Shift</span> 加速 · <span class="k">滚轮</span> 调速',
-    helpCommon:'<span class="k">1-4</span> 切换模式 · <span class="k">T</span> 时间流动 · <span class="k">H</span> 隐藏界面 · 小地图点击可前往',
+    helpCommon:'<span class="k">1-5</span> 切换模式 · <span class="k">T</span> 时间流动 · <span class="k">H</span> 隐藏界面 · 小地图点击可前往',
     timeOn:'时间流动',timeOff:'时间暂停',flySpeed:v=>`飞行速度 ${v} m/s`,fromKCL:v=>`距 KCL ${v}m`,
     joinHint:'按手柄 A 键加入',leaveHint:'长按 Start 退出',paused:'暂停',addBot:'添加机器人',mappingWarn:'请按 A — 非标准手柄映射',
     load1:'正在解析街道与建筑数据…',load2:'正在铺设路面、泰晤士河与桥梁…',load3:n=>`正在建造 ${n} 栋建筑…`,load4:'正在种树、安装路灯与街道设施…',load5:'正在放出行人和车辆…',done:'完成',loadFail:'加载失败：'}};
@@ -1095,6 +1113,9 @@ function onPlayersChanged(){
 }
 function setMode(m){if(m===mode)return;const prev=mode;mode=m;controls.enabled=m==='orbit';orbitAnim=null;if(document.pointerLockElement)document.exitPointerLock();
   const dir=new THREE.Vector3();camera.getWorldDirection(dir);
+  document.getElementById('speedo').style.display=m==='strand'?'block':'none';
+  if(m==='strand')driveCam.snap(car);
+  if(prev==='strand')car.velocity.set(0,0,0);
   if(prev==='drive'){DRIVE.group.visible=false;document.getElementById('drivehud').style.display='none';}
   if(m!=='walk'){
     for(const p of Players.players){if(p.body)p.body.visible=false;if(p.tag)p.tag.visible=false;}
@@ -1109,8 +1130,8 @@ function setMode(m){if(m===mode)return;const prev=mode;mode=m;controls.enabled=m
   if(m==='walk'){
     if(!Players.players.length){player=Players.seedPrimary(kbSource,playerInput,camera);}
     player=Players.players[0];
-    if(!playSpawned||prev==='drive'){
-      const src=prev==='orbit'?controls.target:prev==='drive'?DRIVE:camera.position;const p=freeSpot(src.x,src.z);
+    if(!playSpawned||prev==='drive'||prev==='strand'){
+      const src=prev==='orbit'?controls.target:prev==='drive'?DRIVE:prev==='strand'?car.position:camera.position;const p=freeSpot(src.x,src.z);
       player.pos.set(p.x,0,p.z);player.yaw=Math.atan2(-dir.x,-dir.z);player.pitch=0;player.vel.set(0,0,0);playSpawned=true;
     }
     for(const p of Players.players){Players.ensureBody(p);ChaseCam.snapChase(p);p.body&&(p.body.visible=!(p.view&&p.view.firstPerson));}
@@ -1122,12 +1143,10 @@ function setMode(m){if(m===mode)return;const prev=mode;mode=m;controls.enabled=m
     if(prev==='walk'&&p1){const fwd=new THREE.Vector3(-Math.sin(p1.yaw),0,-Math.cos(p1.yaw));t=p1.pos.clone().addScaledVector(fwd,15);t.y=2;camera.position.set(t.x-fwd.x*60,45,t.z-fwd.z*60);}
     else{t=camera.position.clone().addScaledVector(dir,120);t.y=Math.max(0,Math.min(t.y,40));}
     controls.target.copy(t);controls.update();
-    for(const p of Players.players){if(p.body)p.body.visible=false;if(p.tag)p.tag.visible=false;}
-    Hud.setJoinOverlay(false);Hud.syncViewHuds([],new Map(),i18n);
   }
   document.querySelectorAll('.modes button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));
   document.getElementById('street').style.display=(m==='walk'&&Players.players.length<=1)?'block':'none';
-  updateHelp();showToast(i18n({orbit:'modeOrbit',walk:'modeWalk',fly:'modeFly',drive:'modeDrive'}[m]));
+  updateHelp();showToast(i18n({orbit:'modeOrbit',walk:'modeWalk',fly:'modeFly',drive:'modeDrive',strand:'strand'}[m]));
 }
 /* =========================================================
    驾驶：街机式车辆物理（油门、刹车、手刹漂移），车身由多个圆近似，和建筑、街道设施、车流发生碰撞
@@ -1213,7 +1232,7 @@ function updateOrbit(dt){if(orbitAnim){orbitAnim.t=Math.min(1,orbitAnim.t+dt/1.8
   const f=(key('KeyW')||key('ArrowUp')?1:0)-(key('KeyS')||key('ArrowDown')?1:0),r=(key('KeyD')||key('ArrowRight')?1:0)-(key('KeyA')||key('ArrowLeft')?1:0),rot=(key('KeyQ')?1:0)-(key('KeyE')?1:0);
   if(f||r){orbitAnim=null;const d=camera.position.distanceTo(controls.target);const fw=controls.target.clone().sub(camera.position);fw.y=0;fw.normalize();const rt=new THREE.Vector3(-fw.z,0,fw.x);const mv=fw.multiplyScalar(f).add(rt.multiplyScalar(r)).multiplyScalar(dt*Math.max(10,d*0.8)*((key('ShiftLeft')||key('ShiftRight'))?2.5:1));controls.target.add(mv);camera.position.add(mv);}
   if(rot){const off=camera.position.clone().sub(controls.target);off.applyAxisAngle(UP,rot*dt*1.2);camera.position.copy(controls.target).add(off);}controls.update();if(camera.position.y<1.5)camera.position.y=1.5;}
-function flyTo(t,off){if(mode==='drive'){spawnCar(t.x,t.z);return;}if(mode==='walk'){const o=off.clone();o.y=0;o.normalize();const base=freeSpot(t.x+o.x*25,t.z+o.z*25);Players.teleportRing(base.x,base.z,t.x,t.z);return;}
+function flyTo(t,off){if(mode==='strand'){relocateStrandCar(t.x,t.z);return;}if(mode==='drive'){spawnCar(t.x,t.z);return;}if(mode==='walk'){const o=off.clone();o.y=0;o.normalize();const base=freeSpot(t.x+o.x*25,t.z+o.z*25);Players.teleportRing(base.x,base.z,t.x,t.z);return;}
   if(mode==='fly'){const p=Players.players[0]||player;p.pos.set(t.x+off.x*0.7,Math.max(t.y+off.y*0.7,10),t.z+off.z*0.7);const d=t.clone().sub(p.pos);p.yaw=Math.atan2(-d.x,-d.z);p.pitch=Math.atan2(d.y,Math.hypot(d.x,d.z));p.vel.set(0,0,0);return;}
   orbitAnim={t:0,t0:controls.target.clone(),t1:t.clone(),p0:camera.position.clone(),p1:t.clone().add(off)};}
 
@@ -1221,7 +1240,7 @@ function flyTo(t,off){if(mode==='drive'){spawnCar(t.x,t.z);return;}if(mode==='wa
    UI / 标签 / 小地图
    ========================================================= */
 let toastT;function showToast(s){const t=document.getElementById('toast');t.textContent=s;t.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>t.style.opacity=0,1500);}
-function updateHelp(){document.getElementById('help').innerHTML=i18n({orbit:'helpOrbit',walk:'helpWalk',fly:'helpFly',drive:'helpDrive'}[mode])+'<br>'+i18n('helpCommon');
+function updateHelp(){document.getElementById('help').innerHTML=i18n({orbit:'helpOrbit',walk:'helpWalk',fly:'helpFly',drive:'helpDrive',strand:'helpStrand'}[mode])+'<br>'+i18n('helpCommon');
   const showXhair=mode==='fly'||(mode==='walk'&&player&&player.view&&player.view.firstPerson&&Players.players.length<=1);
   document.getElementById('crosshair').style.display=showXhair?'block':'none';updateLockHint();}
 function updateLockHint(){const fp=mode==='walk'||mode==='fly';document.getElementById('lockhint').style.display=fp&&!document.pointerLockElement?'block':'none';}
@@ -1258,6 +1277,10 @@ function setupUI(){
   botBtn.onclick=()=>{if(mode!=='walk')setMode('walk');const b=new BotSource();const np=Players.addPlayer(b,{name:'Bot'});if(np)onPlayersChanged();botBtn.blur();};
   dbg.appendChild(botBtn);document.querySelector('#side section:last-of-type').appendChild(dbg);
   addEventListener('keydown',e=>{
+    if(intro)return;
+    if(e.code==='Digit5')setMode('strand');
+    if(e.code==='KeyE'&&!e.repeat)toggleCar();
+    if(e.code==='KeyV'&&!e.repeat&&mode==='strand')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
     if(e.code==='Digit4')setMode('drive');
     if(mode==='drive'&&!e.repeat){if(e.code==='KeyV')cycleCar();if(e.code==='KeyC')DRIVE.camMode^=1;if(e.code==='KeyR'){spawnCar(DRIVE.x,DRIVE.z);showToast(i18n('carReset'));}}
@@ -1268,7 +1291,7 @@ function setupUI(){
   el.addEventListener('wheel',e=>{if(mode==='fly'){flySpeed=clamp(flySpeed*(e.deltaY>0?0.85:1.18),3,600);showToast(i18n('flySpeed',flySpeed.toFixed(0)));}},{passive:true});el.addEventListener('contextmenu',e=>e.preventDefault());
   const mm=document.getElementById('minimap');mm.addEventListener('click',e=>{const r=mm.getBoundingClientRect();const x=((e.clientX-r.left)/r.width*2-1)*RH,z=((e.clientY-r.top)/r.height*2-1)*RH;
     if(mode==='orbit'){const off=camera.position.clone().sub(controls.target);const t=new THREE.Vector3(x,controls.target.y,z);orbitAnim={t:0,t0:controls.target.clone(),t1:t,p0:camera.position.clone(),p1:t.clone().add(off)};}
-    else if(mode==='drive')spawnCar(x,z);else if(mode==='walk'){const p=freeSpot(x,z);Players.teleportRing(p.x,p.z,p.x,p.z-10);}else{const p=Players.players[0]||player;p.pos.x=x;p.pos.z=z;}});
+    else if(mode==='strand')relocateStrandCar(x,z);else if(mode==='drive')spawnCar(x,z);else if(mode==='walk'){const p=freeSpot(x,z);Players.teleportRing(p.x,p.z,p.x,p.z-10);}else{const p=Players.players[0]||player;p.pos.x=x;p.pos.z=z;}});
   updateHelp();}
 let shadowBoxSide=110;
 function applyQuality(q){const n=mode==='walk'?Math.max(1,Players.players.length):1;
@@ -1313,6 +1336,15 @@ function renderSharedMap(rect){
   renderer.setViewport(gl.x,gl.y,gl.w,gl.h);renderer.setScissor(gl.x,gl.y,gl.w,gl.h);renderer.render(scene,mapCam);
 }
 
+function updateWeatherView(cam){
+  dome.position.copy(cam.position);
+  dome.scale.setScalar(Math.min(1,cam.far/12000));
+  if(RAIN){
+    RAIN.visible=rainOn&&LOOK==='london'&&cam.position.y<160;
+    RAIN.material.uniforms.uCam.value.copy(cam.position);
+  }
+}
+
 function renderViews(dt){
   const multi=Views.layout.length>1;
   renderer.autoClear=false;renderer.setScissorTest(multi);
@@ -1326,6 +1358,7 @@ function renderViews(dt){
     const gl=Views.toWebGL(v,innerHeight);
     renderer.setViewport(gl.x,gl.y,gl.w,gl.h);
     if(multi)renderer.setScissor(gl.x,gl.y,gl.w,gl.h);
+    updateWeatherView(v.camera);
     renderer.render(scene,v.camera);
   }
   renderer.setScissorTest(false);renderer.setViewport(0,0,innerWidth,innerHeight);renderer.autoClear=true;
@@ -1354,18 +1387,19 @@ function placeShadow(){
   const texel=2*shadowSize/sun.shadow.mapSize.x;const px=Math.round(_focus.dot(_lx)/texel)*texel,py=Math.round(_focus.dot(_ly)/texel)*texel,pz=_focus.dot(_lz);
   _focus.copy(_lx).multiplyScalar(px).addScaledVector(_ly,py).addScaledVector(_lz,pz);sun.target.position.copy(_focus);sun.position.copy(_focus).addScaledVector(_lz,1500);}
 // 近裁剪面随视距调整，提高远处的深度精度（减少屋顶 / 路面的 Z 冲突闪烁）
-function fitNear(){const n=mode==='walk'?0.12:mode==='drive'?0.25:clamp((mode==='orbit'?camera.position.distanceTo(controls.target):camera.position.y)*0.004,0.2,10);
+function fitNear(){const n=mode==='walk'?0.12:(mode==='drive'||mode==='strand')?0.25:clamp((mode==='orbit'?camera.position.distanceTo(controls.target):camera.position.y)*0.004,0.2,10);
   if(Math.abs(camera.near-n)/n>0.25){camera.near=n;camera.updateProjectionMatrix();}}
-function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0.05);uTime.value+=dt;frameNo++;
+function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const dt=Math.min(elapsed,0.05);uTime.value+=dt;frameNo++;
   if(timePlaying){hours=(hours+dt*timeSpeed/60)%24;lightTick+=dt;if(lightTick>0.25){lightTick=0;document.getElementById('time').value=hours;updateLighting();}}
   const ph=uTime.value%30;sigPhase=ph<14?0:ph<17?1:2;if(SIG_MATS){SIG_MATS[0].emissiveIntensity=sigPhase===2?3:0;SIG_MATS[1].emissiveIntensity=sigPhase===1?3:0;SIG_MATS[2].emissiveIntensity=sigPhase===0?3:0;BEACON_MAT.emissiveIntensity=(uTime.value%1.2)<0.6?2.5:0.1;}
-  if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
+  if(intro)intro.update(elapsed);else if(mode==='strand')updateStrandCar(dt);else if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
+  checkNearCar();
   if(lifeRoot.visible)updateLife(dt);
   for(const fn of MOD_HOOKS)fn(dt);
   fitNear();
-  if(RAIN){RAIN.visible=rainOn&&LOOK==='london'&&camera.position.y<160;RAIN.material.uniforms.uCam.value.copy(camera.position);}
-  dome.position.copy(camera.position);gradePass.uniforms.uTime.value=uTime.value;
-  if(mode==='drive'&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
+  updateWeatherView(camera);
+  gradePass.uniforms.uTime.value=uTime.value;
+  if((mode==='drive'||mode==='strand')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
   if(EYE){EYE.wheel.rotation.z+=dt*0.0035;for(const c of EYE.caps)c.rotation.z=-EYE.wheel.rotation.z;}
   waterNormal.offset.x+=dt*0.0008;waterNormal.offset.y+=dt*0.0005;
 
@@ -1377,6 +1411,7 @@ function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0
       if(p.view)p.view.camera=camera;
       ChaseCam.updateChaseCam(p,dt,blockedAt);
       focusShadow(p,shadowBoxSide);
+      updateWeatherView(camera);
       composer.render();
       labelRenderer.render(scene,camera);
       if((streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(p.pos.x,p.pos.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${p.pos.z<riverZ(p.pos.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;p._streetName=r.name;}else{el.style.display='none';p._streetName='';}}
@@ -1404,7 +1439,7 @@ function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0
     const p=mode==='walk'&&Players.players[0]?Players.players[0].pos:mode==='orbit'?controls.target:camera.position;
     if(!(mode==='walk'&&Players.players.length>1)){document.getElementById('cxy').textContent=`${(LAT0-p.z/KZ).toFixed(4)}°N ${Math.abs(LON0+p.x/KX).toFixed(4)}°W`;document.getElementById('calt').textContent=i18n('fromKCL',Math.hypot(p.x,p.z).toFixed(0));}}}
 function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;return 1e9;}
-let labelsWereShown=true,rainOn=true,RAIN=null;const MOD_HOOKS=[];
+let rainOn=true,RAIN=null;const MOD_HOOKS=[];
 // 毛毛雨：围绕相机的一盒雨丝，全部在顶点着色器里下落和循环，几乎不占 CPU
 function buildRain(){const N=2600,P=new Float32Array(N*6),E=new Float32Array(N*2);for(let i=0;i<N;i++){const x=rr(0,60),y=rr(0,40),z=rr(0,60);P.set([x,y,z,x,y,z],i*6);E[i*2+1]=1;}
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(P,3));g.setAttribute('aEnd',new THREE.BufferAttribute(E,1));
@@ -1417,6 +1452,73 @@ function buildRain(){const N=2600,P=new Float32Array(N*6),E=new Float32Array(N*2
 /* =========================================================
    启动
    ========================================================= */
+let car=null;        // the drivable car (DrivableCar)
+let driveCam=null;   // camera that follows the car (DriveCamera)
+let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
+let nearCarShown=false;
+const ENTER_DISTANCE=5; // metres from the car's centre to get in
+
+// Park the car on the Strand right in front of the KCL Strand Building.
+// (0,0) is KCL; the Strand runs past ~70 m north of it.
+function parkStrandCar(){
+  const f=roadFrameFast(-34,-72,40)||{px:-34,pz:-72,tx:1,tz:0};
+  let tx=f.tx,tz=f.tz;if(tx<0){tx=-tx;tz=-tz;}          // point east along the Strand
+  const heading=Math.atan2(-tx,-tz);                     // car "forward" is -z in its model
+  car=new DrivableCar(f.px,f.pz,heading,(x,z)=>blockedAt(x,z)||collideCircle(x,z,0.18).hit);
+  // If that exact spot touches a wall, slide along the road until it's clear.
+  for(let s=0;s<60&&car.hits(car.position.x,car.position.z,heading);s++){
+    const d=(s%2?1:-1)*Math.ceil(s/2)*2;car.position.set(f.px+tx*d,0,f.pz+tz*d);}
+  scene.add(car.mesh);
+  driveCam=new DriveCamera(camera);
+}
+
+// One frame of driving: keyboard -> car -> camera -> speedometer.
+function relocateStrandCar(x,z){
+  const road=roadFrameFast(x,z,120);
+  const pos=freeSpot(road?.px??x,road?.pz??z);
+  car.position.copy(pos);
+  car.velocity.set(0,0,0);
+  driveCam.snap(car);
+}
+function updateStrandCar(dt){
+  const input={
+    throttle:key('KeyW')||key('ArrowUp')?1:0,
+    brake:key('KeyS')||key('ArrowDown')?1:0,
+    steer:(key('KeyA')||key('ArrowLeft')?1:0)-(key('KeyD')||key('ArrowRight')?1:0),
+    handbrake:key('Space'),
+  };
+  if(car.update(dt,input))showToast(i18n('crash'));
+  driveCam.update(dt,car);
+  document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
+}
+
+// E: get in (when walking next to the car) or get out (when driving).
+function toggleCar(){
+  if(mode==='strand'){
+    // Step out of the driver's door (right-hand side in the UK) onto free ground.
+    const fwd=car.forward();const p=freeSpot(car.position.x-fwd.z*2.4,car.position.z+fwd.x*2.4);
+    setMode('walk');player.pos.set(p.x,0,p.z);player.yaw=car.heading;player.pitch=0;showToast(i18n('carOut'));
+  }else if(mode==='walk'&&player.pos.distanceTo(car.position)<ENTER_DISTANCE){
+    setMode('strand');
+  }
+}
+
+// While walking, say "Press E" once when you come close to the car.
+function checkNearCar(){
+  if(mode!=='walk'||!car)return;
+  const near=player.pos.distanceTo(car.position)<ENTER_DISTANCE;
+  if(near&&!nearCarShown)showToast(i18n('carNear'));nearCarShown=near;
+}
+
+// The 3-second swoop from high above London down to the car at KCL.
+// Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
+function startIntro(){
+  const done=()=>{intro=null;setMode('strand');};
+  if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
+  controls.enabled=false;
+  intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done);
+}
+
 const setLoad=(m,p)=>{document.getElementById('loadmsg').textContent=m;document.getElementById('loadbar').style.width=p*100+'%';};
 async function init(){
   setLoad(i18n('load1'),0.05);await nextFrame();
@@ -1433,9 +1535,10 @@ async function init(){
   const qt=parseFloat(QS.get('time'));if(qt>=0&&qt<24){hours=qt;document.getElementById('time').value=qt;}
   buildLife();
   Players.init({clamp,lerp,moveWalk,pedGeo,crowdMaterial:PED_MAT,scene});
-  buildDriveCars();buildRain();buildLabels();buildMinimap();setupUI();onResize();setLook(LOOK);
+  buildDriveCars();parkStrandCar();buildRain();buildLabels();buildMinimap();setupUI();onResize();setLook(LOOK);
   const at=(QS.get('at')||'').split(',').map(Number);if(at.length===2&&at.every(Number.isFinite)){const [x,z]=proj(at[0],at[1]);controls.target.set(x,2,z);camera.position.set(x+70,55,z+90);}controls.update();
-  if(CARS[QS.get('car')])DRIVE.kind=QS.get('car');const qm=QS.get('mode');if(['walk','fly','drive'].includes(qm))setMode(qm);
+  if(CARS[QS.get('car')])DRIVE.kind=QS.get('car');const qm=QS.get('mode');if(['walk','fly','drive','strand'].includes(qm))setMode(qm);
+  if(!qm&&!QS.has('at')&&!QS.has('car'))startIntro();
   exposeAPI();
   setLoad(i18n('done'),1);await nextFrame();frame();const ld=document.getElementById('loading');ld.style.opacity=0;setTimeout(()=>ld.remove(),700);
 }

@@ -4,8 +4,7 @@ A standalone 3D model of the real streets within 2 km of King's College London's
 
 ## Run it
 
-- Double-click `index.html`, or
-- `node serve.js` and open <http://localhost:8080>
+Run `npm start` from the repository root and open <http://localhost:8080>.
 
 It needs an internet connection the first time to load Three.js from the jsDelivr CDN. The UI is in English by default; the **中文** button in the top bar switches to Chinese (remembered per browser).
 
@@ -17,6 +16,9 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 | 2 | Walk | click to lock the mouse · WASD walk · Shift jog · Space jump |
 | 3 | Fly | WASD move · Space/E up · C/Q down · Shift faster · wheel speed |
 | 4 | Drive | W/S throttle/brake (hold S to reverse) · A/D steer · Space handbrake · V change vehicle · C chase/cab camera · R back on the road |
+| 5 | Strand car | WASD/arrows drive · Space handbrake · V chase/overhead · E exit or re-enter on foot |
+
+The opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Driving uses one view.
 
 T runs/pauses time, H hides the UI, and clicking the minimap moves you there.
 

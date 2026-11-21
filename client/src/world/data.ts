@@ -80,7 +80,7 @@ export function nearestStreet(data: LondonData, x: number, z: number) {
 }
 
 export async function loadLondonData(): Promise<LondonData> {
-  const res = await fetch('/data/london.json');
+  const res = await fetch('./data/london.json');
   if (!res.ok) throw new Error('Could not load london.json - did you run "npm.cmd run fetch-osm"?');
   return res.json();
 }

@@ -56,9 +56,9 @@ export class KeyboardMouseSource {
       this.keys[e.code] = true;
       if (e.code === 'Space') {
         e.preventDefault();
-        if (!e.repeat) this.jumpSeq++;
+        if (this.getMode() === 'walk' && !e.repeat) this.jumpSeq++;
       }
-      if (e.code === 'KeyV' && !e.repeat) this.toggleViewSeq++;
+      if (e.code === 'KeyV' && this.getMode() === 'walk' && !e.repeat) this.toggleViewSeq++;
       if (e.code.startsWith('Arrow')) e.preventDefault();
     });
     addEventListener('keyup', (e) => {
