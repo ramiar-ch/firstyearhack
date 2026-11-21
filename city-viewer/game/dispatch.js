@@ -11,9 +11,19 @@
 const DIRS = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const compass = (deg) => DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 
+/** Turn a sentence into 1997 pager shorthand: "PG: BUSH HSE NW 110M". */
+function pagerText(text) {
+  return 'PG: ' + text.toUpperCase()
+    .replace(/NORTH-WEST/g, 'NW').replace(/NORTH-EAST/g, 'NE').replace(/SOUTH-WEST/g, 'SW').replace(/SOUTH-EAST/g, 'SE')
+    .replace(/NORTH/g, 'N').replace(/SOUTH/g, 'S').replace(/EAST/g, 'E').replace(/WEST/g, 'W')
+    .replace(/ METRES/g, 'M').replace(/ABOUT /g, '').replace(/HOUSE/g, 'HSE').replace(/ STATION/g, ' STN')
+    .replace(/[.,!]/g, '').replace(/ THE /g, ' ');
+}
+
 export class Dispatch {
   /** toLatLon(x, z) turns game metres into { lat, lon }. */
   constructor(toLatLon) {
+    this.isRetro = () => false; // set by the game: true in 1997 (pager mode)
     this.toLatLon = toLatLon;
     this.box = document.createElement('div');
     this.box.id = 'dispatch';
@@ -53,13 +63,17 @@ export class Dispatch {
   }
 
   show(text, viaSnowflake) {
-    this.box.querySelector('.d-head').textContent = viaSnowflake ? '❄ SNOWFLAKE DISPATCH' : 'DISPATCH';
+    // 1997: no GPS, no voice assistant - you get a PAGER message instead.
+    const pager = this.isRetro();
+    if (pager) text = pagerText(text);
+    this.box.classList.toggle('pager', pager);
+    this.box.querySelector('.d-head').textContent = pager ? '✉ PAGER · 1997' : viaSnowflake ? '❄ SNOWFLAKE DISPATCH' : 'DISPATCH';
     this.box.querySelector('.d-text').textContent = text;
     this.box.style.display = 'block';
     clearTimeout(this.hideTimer);
     this.hideTimer = setTimeout(() => { this.box.style.display = 'none'; }, 9000);
-    // Read it aloud (British voice if there is one).
-    try {
+    // Read it aloud (British voice if there is one) - but pagers can't talk.
+    if (!pager) try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
       const v = speechSynthesis.getVoices().find((x) => x.lang === 'en-GB');
@@ -68,6 +82,6 @@ export class Dispatch {
       speechSynthesis.speak(u);
     } catch { /* no speech */ }
     // And big on the phone controller.
-    fetch('/api/phone-message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).catch(() => {});
+    fetch('/api/phone-message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, pager }) }).catch(() => {});
   }
 }

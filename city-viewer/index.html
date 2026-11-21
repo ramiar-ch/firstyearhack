@@ -164,6 +164,9 @@
     padding:10px 16px;border-radius:12px;background:rgba(234,243,255,.95);color:#05070d;border:2px solid #29b5e8}
   #dispatch .d-head{font:900 13px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.12em;color:#1279a8;margin-bottom:4px}
   #dispatch .d-text{font:700 17px/1.35 "Segoe UI",system-ui,sans-serif}
+  #dispatch.pager{background:#a8c66c;color:#1c2b10;border-color:#3a4a2a}
+  #dispatch.pager .d-head{color:#1c2b10}
+  #dispatch.pager .d-text{font-family:"Courier New",monospace;letter-spacing:.04em}
   #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
   #report .r-close{margin-top:10px;font-size:13px;color:#666}
 </style>
@@ -252,6 +255,7 @@ import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
 import { buildPatrolRoads } from './game/police.js';
 import { TimeWarp } from './game/timewarp.js';
+import { Eras } from './game/eras.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
 import { PoliceReport } from './game/report.js';
@@ -2195,6 +2199,7 @@ function buildRain(){const N=2600,P=new Float32Array(N*6),E=new Float32Array(N*2
    ========================================================= */
 let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
+let eras=null;       // 1997 vs 2026 London: bollards on the Strand, London Eye (Eras)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
 let report=null;     // end-of-match police report from Snowflake Cortex (PoliceReport)
@@ -2210,7 +2215,7 @@ const ENTER_DISTANCE=5; // metres from the car's centre to get in
 
 // Park the car on the Strand right in front of the KCL Strand Building.
 // (0,0) is KCL; the Strand runs past ~70 m north of it.
-const strandCarBlocked=(x,z)=>Math.hypot(x,z)>PLAY_RADIUS||blockedAt(x,z)||collideCircle(x,z,0.18).hit;
+const strandCarBlocked=(x,z)=>Math.hypot(x,z)>PLAY_RADIUS||blockedAt(x,z)||collideCircle(x,z,0.18).hit||(eras!==null&&eras.hits(x,z));
 function parkStrandCar(){
   const f=roadFrameFast(-34,-72,40)||{px:-34,pz:-72,tx:1,tz:0};
   let tx=f.tx,tz=f.tz;if(tx<0){tx=-tx;tz=-tz;}          // point east along the Strand
@@ -2226,8 +2231,23 @@ function parkStrandCar(){
   warp=new TimeWarp(scene,spot.x,spot.z,{
     getPixelRatio:()=>renderer.getPixelRatio(),
     setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
-    onRetroChange:on=>{driveCam.view=split.cam2.view=on?'overhead':'chase';},
+    onRetroChange:on=>{
+      driveCam.view=split.cam2.view=on?'overhead':'chase';
+      if(eras)eras.set(on?1997:2026); // bollards vanish, no London Eye in 1997
+      if(!intro&&!boot)showToast(on?'📟 1997 · no CCTV, no GPS · you can\x27t be tracked':'📡 2026 · CCTV + Snowflake online · you can be tracked');
+      fetch('/api/phone-message',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(on?{text:'PG: 1997 MODE. NO CCTV. NO GPS. YOU ARE INVISIBLE.',pager:true}:{text:'Back in 2026. GPS and Snowflake online - the Met can see you.',pager:false})}).catch(()=>{});
+    },
   });
+  // ERAS: the Strand outside KCL is pedestrian since 2022 -> bollards in 2026 (gone in 1997).
+  // They stand across the pedestrian Strand just east of the start, in clear view.
+  const bf=roadFrameFast(-1.5,-92,25)||{px:-1.5,pz:-92,tx:0.79,tz:-0.61};
+  eras=new Eras(scene,{x:bf.px,z:bf.pz,ax:-bf.tz,az:bf.tx,halfWidth:9},EYE?EYE.wheel.parent:null);
+  // Warped to 1997 in the middle of a chase: the police lose you.
+  warp.onLost=()=>{
+    wanted.clear();sfx.warp();
+    missions.showBanner('NO CCTV IN 1997','Suspect lost · the Met can\x27t track you here','passed');
+  };
 }
 
 // One frame of driving: keyboard -> car -> camera -> speedometer.
@@ -2258,7 +2278,7 @@ function updateStrandCar(dt){
 
 // E: get in (when walking next to the car) or get out (when driving).
 function toggleCar(){
-  if(warp.wanted&&(mode==='strand'||mode==='walk')&&warp.near(mode==='strand'?car.position:player.pos,mode==='strand'?8:3.5)){
+  if((mode==='strand'||mode==='walk')&&warp.near(mode==='strand'?car.position:player.pos,mode==='strand'?8:3.5)){
     warp.escape();
     return;
   }
@@ -2346,6 +2366,7 @@ function startMissions(){
   // shown on screen, read aloud, and sent to the phone (game/dispatch.js).
   const toLatLon=(x,z)=>({lat:LAT0-z/KZ,lon:LON0+x/KX});
   const dispatch=new Dispatch(toLatLon);
+  dispatch.isRetro=()=>warp.retro; // 1997: dispatch arrives as pager text
   missions.onTarget=(stage,place)=>{
     const position=split.on&&phone.phones?split.car2.position:mode==='walk'?player.pos:car.position;
     dispatch.guide(stage,position,place,missions.item);
@@ -2429,7 +2450,7 @@ function toggleSplit(){
   const on=split.toggle(car);
   if(on)report.stats.players=2;
   labelRenderer.domElement.style.display=on?'none':'';
-  if(!on&&warp.wanted==='p2')warp.escape();
+  if(!on&&warp.wanted==='p2')warp.clearWanted();
   if(!on)onResize(); // give P1's camera the full screen shape back
   showToast(on?'2 players! P1: WASD · P2: arrows or phone':'1 player');
 }

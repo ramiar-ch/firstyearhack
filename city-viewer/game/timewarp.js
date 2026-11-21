@@ -1,4 +1,9 @@
-// Phone-box escape, police alert and automatic 1997 visuals.
+// Phone box = TIME MACHINE between 2026 and 1997, plus the police alert.
+//
+// The idea: in 2026 London is full of data (CCTV, number-plate cameras,
+// Snowflake) so the Met can always track you. In 1997 none of that existed:
+// warp there and the police LOSE you, and new crashes don't get you wanted.
+// Use the phone box (or R) again to come back to 2026.
 
 import * as THREE from 'three';
 
@@ -25,6 +30,7 @@ export class TimeWarp {
     this.crt = addDiv('crt', '');
     this.siren = null;
     this.onEvent = () => {}; // set by the game: 'police' / 'warp' (for phone haptics)
+    this.onLost = () => {}; // set by the game: police lost you (warped to 1997 mid-chase)
   }
 
   /** Is (pos) close enough to the phone box to use it? */
@@ -35,18 +41,20 @@ export class TimeWarp {
   /** Track the driver who triggered this pursuit. */
   raiseWanted(driver) {
     if (this.wanted) return;
+    if (this.retro) return; // 1997: no CCTV, no data - nobody can track you
     this.wanted = driver;
     this.alert.style.display = 'block';
     this.startSiren();
     this.onEvent('police');
   }
 
-  /** End the chase with the phone box flash and sound. */
+  /** Phone box: travel 2026 <-> 1997 (flash). Going to 1997 mid-chase = the police lose you. */
   escape() {
-    if (!this.wanted) return;
+    const toPast = !this.retro;
     this.onEvent('warp');
     this.flashScreen();
-    this.clearWanted();
+    setTimeout(() => this.setRetro(toPast), 200); // swap while the screen is white
+    if (toPast && this.wanted) { this.clearWanted(); this.onLost(); }
   }
 
   clearWanted() {
@@ -75,8 +83,8 @@ export class TimeWarp {
     this.onRetroChange(on);
   }
 
-  update(missionActive) {
-    this.setRetro(missionActive || Boolean(this.wanted));
+  update() {
+    // (1997 is now a place you CHOOSE to go to - see escape() - not automatic.)
     // Phone box beam pulses, brighter while the police are after you.
     const beam = this.box.userData.beam;
     beam.material.opacity = (this.wanted ? 0.55 : 0.25) + Math.sin(performance.now() / 200) * 0.1;

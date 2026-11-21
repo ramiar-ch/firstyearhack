@@ -90,7 +90,7 @@ function handle(req, res, port) {
   if (req.method === 'POST' && url.pathname === '/api/phone-message') {
     // Show a message big on the phone controller (e.g. the dispatch text).
     readJson(req, (d) => {
-      if (d && typeof d.text === 'string') send('phone', 'message', { text: d.text.slice(0, 200) });
+      if (d && typeof d.text === 'string') send('phone', 'message', { text: d.text.slice(0, 200), pager: !!d.pager });
       res.writeHead(204);
       res.end();
     });
