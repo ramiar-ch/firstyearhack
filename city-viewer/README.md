@@ -31,6 +31,8 @@ Teal dots on the minimap mark shared bicycle stations. Select a station in Orbit
 - **Real (OpenStreetMap):** street layout and names, one-way streets, bus lanes, building footprints and heights/storeys where tagged, the Thames, bridges, rail viaducts, parks, street trees, and the positions of traffic lights, crossings, bus stops, phone boxes, post boxes, benches and Tube entrances.
 - **Generated:** facades of ordinary buildings (London styles: Portland stone, Victorian red brick, Georgian stock brick, stucco, glass, concrete, warehouse), shopfronts, mansard roofs, chimneys, tree species (London plane, lime, birch, conifer), vehicles including classic Routemaster-style double-deckers, cyclists, shared bicycle stations, and pedestrians of different ages. Heights are estimated where OSM has none. The ground is flat.
 
+The Places menu frames the detailed landmark models. Elizabeth Tower's four dials follow the viewer clock, and Somerset House's courtyard fountains animate in close views. Architectural references include [UK Parliament](https://virtualtours-assets.parliament.uk/elizabeth-tower/index.html), [St Paul's Cathedral](https://www.stpauls.co.uk/wren-office-drawings), [Somerset House](https://www.somersethouse.org.uk/venue-hire/our-spaces/the-edmond-j-safra-fountain-court), and the Historic England listings for [Bush House](https://historicengland.org.uk/listing/the-list/list-entry/1066492) and the [Royal Courts of Justice](https://historicengland.org.uk/listing/the-list/list-entry/1264258).
+
 ## Collisions and modding
 
 Building walls (from the OSM footprints), Thames embankments, bridge parapets and railway viaduct walls are stored as line segments. Trees, posts, docks, street furniture and viaduct piers use circles. Walking, driving and cycling use the same collision world. Each car, bus and bicycle has a footprint that turns with it. The player and AI traffic check the full motion to the next position against those footprints and static obstacles. Traffic follows the road network on the left and yields to red lights and occupied space.
@@ -70,6 +72,7 @@ window.addEventListener('cityworld-ready', () => {
 - `index.html` — the viewer
 - `city-models.js` — vehicle, rider and pedestrian geometry
 - `city-traffic.js` — vehicle footprints, collision queries and motion checks
+- `city-landmarks.js` — landmark geometry and animations
 - `city-data.js` — processed OSM data (~5.5 MB)
 - `serve.js` — tiny static server
 - `tools/` — scripts to rebuild `city-data.js`
