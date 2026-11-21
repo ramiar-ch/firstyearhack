@@ -87,8 +87,8 @@ button {
   min-width: 170px;
   padding: 8px 12px;
   background: rgba(5, 7, 13, 0.78);
-  border-left: 4px solid var(--player-colour);
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
 }
 .player-hud.p1 {
   left: 12px;
@@ -96,12 +96,20 @@ button {
 .player-hud.p2 {
   right: 12px;
   text-align: right;
-  border-left: none;
-  border-right: 4px solid var(--player-colour);
 }
 .hud-name {
   font-weight: 700;
   color: var(--player-colour);
+}
+/* small dot in the player's colour (same colour as their ground ring) */
+.hud-name::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--player-colour);
 }
 .hud-speed {
   display: none;
