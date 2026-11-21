@@ -85,6 +85,20 @@
     -webkit-text-stroke:1px #111;paint-order:stroke fill}
   #mission-banner.passed .b-small{color:#7dff9a;font-size:clamp(22px,3vw,34px)}
   .hidden-ui #mission{display:none!important}
+  /* Police alert + time warp + 1997 MODE (game/timewarp.js) */
+  #police-alert{position:fixed;left:50%;top:64px;transform:translateX(-50%);display:none;pointer-events:none;z-index:5;padding:8px 18px;border-radius:10px;
+    font:900 22px/1.2 "Segoe UI",system-ui,sans-serif;text-align:center;color:#fff;animation:police 0.5s steps(1) infinite}
+  #police-alert small{display:block;font-size:13px;font-weight:700}
+  @keyframes police{0%{background:#1a4dff}50%{background:#e0101e}}
+  #warp-flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20}
+  #warp-flash.go{animation:warp-flash .7s ease-out}
+  @keyframes warp-flash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+  #crt{position:fixed;inset:0;display:none;pointer-events:none;z-index:15;
+    background:repeating-linear-gradient(rgba(0,0,0,.22) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.55))}
+  body.retro #crt{display:block}
+  body.retro #app canvas{image-rendering:pixelated}
+  body.retro #mission,body.retro #speedo,body.retro #mission-banner,body.retro #toast{font-family:"Courier New",monospace!important;color:#ffe14a}
+  body.retro #mission .m-title,body.retro #mission .m-money{font-family:"Courier New",monospace}
 </style>
 </head>
 <body>
@@ -156,6 +170,7 @@ import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
 import { IntroSwoop } from './game/intro.js';
 import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
+import { TimeWarp } from './game/timewarp.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1020,7 +1035,7 @@ function setupUI(){
   addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
     keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
-    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1075,6 +1090,7 @@ function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;retu
     and game/intro.js - this part just connects them to the viewer)
    ========================================================= */
 let car=null;        // the drivable car (DrivableCar)
+let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
 let nearCarShown=false;
@@ -1092,6 +1108,13 @@ function spawnCar(){
     const d=(s%2?1:-1)*Math.ceil(s/2)*2;car.position.set(f.px+tx*d,0,f.pz+tz*d);}
   scene.add(car.mesh);
   driveCam=new DriveCamera(camera);
+  // Red phone box (time machine) on the pavement just ahead of the car.
+  const fwd=car.forward();const spot=freeSpot(car.position.x+fwd.x*12+fwd.z*7,car.position.z+fwd.z*12-fwd.x*7);
+  warp=new TimeWarp(scene,spot.x,spot.z,{
+    getPixelRatio:()=>renderer.getPixelRatio(),
+    setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
+    onRetroChange:on=>{driveCam.view=on?'overhead':'chase';showToast(on?'1997 — the Met has never heard of you':'Back to today');},
+  });
 }
 
 // One frame of driving: keyboard -> car -> camera -> speedometer.
@@ -1102,13 +1125,15 @@ function updateDrive(dt){
     steer:(key('KeyA')||key('ArrowLeft')?1:0)-(key('KeyD')||key('ArrowRight')?1:0),
     handbrake:key('Space'),
   };
-  if(car.update(dt,input))showToast(i18n('crash'));
+  if(car.update(dt,input)){showToast(i18n('crash'));warp.raiseWanted();} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
 
 // E: get in (when walking next to the car) or get out (when driving).
 function toggleCar(){
+  // Next to the red phone box? E = time warp instead (works on foot or in the car).
+  if((mode==='walk'||mode==='drive')&&warp.near(mode==='drive'?car.position:player.pos,mode==='drive'?8:3.5)){warp.warp();return;}
   if(mode==='drive'){
     // Step out of the driver's door (right-hand side in the UK) onto free ground.
     const fwd=car.forward();const p=freeSpot(car.position.x-fwd.z*2.4,car.position.z+fwd.x*2.4);
@@ -1155,6 +1180,7 @@ function updateMissions(dt){
   const pos=mode==='drive'?car.position:player.pos;
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,pos,Math.atan2(d.x,-d.z),active);
+  warp.update();
 }
 
 // The 3-second swoop from high above London down to the car at KCL.
