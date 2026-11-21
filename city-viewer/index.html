@@ -108,6 +108,17 @@
   #qr-overlay .qr-url{font:600 15px monospace;margin:10px 0 4px}
   #qr-overlay .qr-tip{font-size:14px;color:#444;margin:0;max-width:360px}
   .hidden-ui #phone-btn{display:none!important}
+  /* 2-player split screen (game/splitScreen.js) */
+  #twop-btn{position:fixed;left:14px;bottom:156px;z-index:4;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--panel-b);font-weight:700}
+  #speedo2{position:absolute;left:75%;bottom:70px;transform:translateX(-50%);display:none;pointer-events:none;
+    font:800 30px/1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#9cc2ff;text-shadow:0 2px 4px rgba(0,0,0,.7)}
+  #speedo2 small{font-size:14px;font-weight:600;margin-left:4px}
+  body.split #speedo2{display:block}
+  body.split #speedo{left:25%}
+  body.split #street{left:25%}
+  body.split #side{display:none} /* the Places panel would cover P2's view */
+  body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:3px;margin-left:-1px;background:#05070d;z-index:3;pointer-events:none}
+  .hidden-ui #twop-btn,.hidden-ui #speedo2{display:none!important}
 </style>
 </head>
 <body>
@@ -181,6 +192,7 @@ import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
 import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
+import { SplitScreen } from './game/splitScreen.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1045,7 +1057,7 @@ function setupUI(){
   addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
     keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
-    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1089,7 +1101,8 @@ function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0
   waterNormal.offset.x+=dt*0.0008;waterNormal.offset.y+=dt*0.0005;
   if((lblTick+=dt)>0.25&&labelsOn){lblTick=0;for(const L of labels){const d=camera.position.distanceTo(L.o.position);L.o.visible=mode!=='walk'&&d<(L.kcl?3000:1600)&&d>40;}}
   if((mode==='walk'||mode==='drive')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
-  if(bloomOn&&night>0.08)composer.render();else renderer.render(scene,camera);labelRenderer.render(scene,camera);drawMinimap();if(missions)missions.drawOnMinimap(mmCtx,v=>(v/RH+1)/2*440,PLAY_RADIUS);
+  if(split&&split.on)split.render(camera); // game addition: 2-player split screen (no glow/labels = faster)
+  else{if(bloomOn&&night>0.08)composer.render();else renderer.render(scene,camera);labelRenderer.render(scene,camera);}drawMinimap();if(missions)missions.drawOnMinimap(mmCtx,v=>(v/RH+1)/2*440,PLAY_RADIUS);
   fpsAcc+=dt;fpsN++;if(fpsAcc>0.5){document.getElementById('fps').textContent=`${Math.round(fpsN/fpsAcc)} FPS`;fpsAcc=0;fpsN=0;const p=mode==='orbit'?controls.target:camera.position;
     document.getElementById('cxy').textContent=`${(LAT0-p.z/KZ).toFixed(4)}°N ${Math.abs(LON0+p.x/KX).toFixed(4)}°W`;document.getElementById('calt').textContent=i18n('fromKCL',Math.hypot(p.x,p.z).toFixed(0));}}
 function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;return 1e9;}
@@ -1102,6 +1115,7 @@ function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;retu
 let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
+let split=null;      // 2-player split screen (SplitScreen)
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
 let nearCarShown=false;
@@ -1130,14 +1144,16 @@ function spawnCar(){
 
 // One frame of driving: keyboard -> car -> camera -> speedometer.
 function updateDrive(dt){
+  // In 2-player mode the arrow keys + phone belong to P2, so P1 only uses WASD.
+  const solo=!(split&&split.on);
   const input={
-    throttle:key('KeyW')||key('ArrowUp')?1:0,
-    brake:key('KeyS')||key('ArrowDown')?1:0,
-    steer:(key('KeyA')||key('ArrowLeft')?1:0)-(key('KeyD')||key('ArrowRight')?1:0),
+    throttle:key('KeyW')||(solo&&key('ArrowUp'))?1:0,
+    brake:key('KeyS')||(solo&&key('ArrowDown'))?1:0,
+    steer:(key('KeyA')||(solo&&key('ArrowLeft'))?1:0)-(key('KeyD')||(solo&&key('ArrowRight'))?1:0),
     handbrake:key('Space'),
   };
   // Phone controller (if one is connected): its buttons add to the keyboard.
-  const ph=phone&&phone.getInput();
+  const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
   if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();} // crash = police alert
@@ -1187,7 +1203,10 @@ function startMissions(){
   }
   missions=new MissionManager(scene,places);
   // Phone controller: its E button = the keyboard's E; game events make it vibrate.
-  phone=new PhoneController(()=>{if(!intro)toggleCar();});
+  phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
+  split=new SplitScreen(scene,renderer,blockedAt);
+  const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
+  twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
   missions.onEvent=e=>phone.haptic(HAPTICS[e]);
   warp.onEvent=e=>phone.haptic(HAPTICS[e]);
   // Handy for debugging: type `game` in the browser console (F12).
@@ -1197,9 +1216,26 @@ function updateMissions(dt){
   if(!missions)return;
   const active=!intro&&(mode==='drive'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='drive'?car.position:player.pos;
+  // P2 (split screen): drive their car, and they can do missions too.
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();}
   const d=new THREE.Vector3();camera.getWorldDirection(d);
-  missions.update(dt,pos,Math.atan2(d.x,-d.z),active);
+  missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   warp.update();
+}
+
+// G: turn 2-player split screen on/off (P1 is put in their car).
+function toggleSplit(){
+  if(intro||!car)return;
+  if(mode!=='drive')setMode('drive');
+  const on=split.toggle(car);
+  labelRenderer.domElement.style.display=on?'none':'';
+  if(!on)onResize(); // give P1's camera the full screen shape back
+  showToast(on?'2 players! P1: WASD · P2: arrows or phone':'1 player');
+}
+
+// P2's "E" (Enter key or the phone's E button): use the phone box if close.
+function p2Action(){
+  if(split&&split.on&&warp.near(split.car2.position,8))warp.warp();
 }
 
 // The 3-second swoop from high above London down to the car at KCL.

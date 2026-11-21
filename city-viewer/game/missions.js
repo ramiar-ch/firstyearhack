@@ -34,6 +34,8 @@ export class MissionManager {
     this.scene = scene;
     this.places = places;
     this.money = 0;
+    this.moneyBy = [0, 0]; // per player (2-player mode)
+    this.players = 1;
     this.passed = 0;
     this.state = 'waiting'; // 'waiting' -> 'pickup' -> 'dropoff' -> 'waiting' ...
     this.wait = 1.5; // first job comes soon after the intro
@@ -108,31 +110,45 @@ export class MissionManager {
     this.showBanner('PARCEL COLLECTED', `Deliver to ${this.dropoff.name} · ${this.timeLeft} s`, 'info');
   }
 
-  finish(success) {
+  /** who = 0 for P1, 1 for P2 (whoever reached the drop-off first). */
+  finish(success, who = 0) {
     this.dropoffBeam.visible = false;
     this.state = 'waiting';
     this.wait = NEXT_JOB_DELAY;
     this.onEvent(success ? 'passed' : 'failed');
     if (success) {
       this.money += REWARD;
+      this.moneyBy[who] += REWARD;
       this.passed++;
-      this.hud.querySelector('.m-money span').textContent = String(this.money);
+      this.refreshMoney();
       this.hud.querySelector('.m-money').classList.remove('pop');
       void this.hud.offsetWidth; // restart the CSS animation
       this.hud.querySelector('.m-money').classList.add('pop');
-      this.showBanner('MISSION PASSED', `+£${REWARD}`, 'passed');
+      this.showBanner('MISSION PASSED', this.players > 1 ? `P${who + 1} +£${REWARD}` : `+£${REWARD}`, 'passed');
     } else {
       this.showBanner('MISSION FAILED', 'Too slow! The customer gave 1 star.', 'failed');
     }
   }
 
+  /** Money display: "£10", or "P1 £10 · P2 £5" in 2-player mode. */
+  refreshMoney() {
+    this.hud.querySelector('.m-money span').textContent =
+      this.players > 1 ? `${this.moneyBy[0]} · P2 £${this.moneyBy[1]}` : String(this.money);
+    this.hud.querySelector('.m-money').firstChild.textContent = this.players > 1 ? 'P1 £' : '£';
+  }
+
   // ---- Every frame ---------------------------------------------------------------
   /**
-   * pos: where the player is (the car when driving).
+   * pos: where the player is (the car when driving) - or a list [P1, P2] in
+   *      2-player mode: whoever gets to the marker first does the job.
    * cameraHeading: compass angle the camera faces (radians, 0 = north), for the arrow.
    * active: false in Orbit/Fly mode - the timer pauses and the HUD hides.
    */
   update(dt, pos, cameraHeading, active) {
+    const all = Array.isArray(pos) ? pos : [pos];
+    if (all.length !== this.players) { this.players = all.length; this.refreshMoney(); }
+    pos = all[0]; // the HUD arrow/distance are for P1
+    const arrived = (place) => all.findIndex((p) => dist2d(p, place) < ARRIVE_DISTANCE);
     this.hud.style.display = active ? 'block' : 'none';
     // Beams gently pulse so they catch the eye.
     const pulse = 0.55 + Math.sin(performance.now() / 300) * 0.15;
@@ -148,10 +164,11 @@ export class MissionManager {
       this.wait -= dt;
       if (this.wait <= 0) this.newJob(pos);
     } else if (this.state === 'pickup') {
-      if (dist2d(pos, this.pickup) < ARRIVE_DISTANCE) this.collect();
+      if (arrived(this.pickup) >= 0) this.collect();
     } else if (this.state === 'dropoff') {
       this.timeLeft -= dt;
-      if (dist2d(pos, this.dropoff) < ARRIVE_DISTANCE) this.finish(true);
+      const who = arrived(this.dropoff);
+      if (who >= 0) this.finish(true, who);
       else if (this.timeLeft <= 0) this.finish(false);
     }
     this.updateHud(pos, cameraHeading);
