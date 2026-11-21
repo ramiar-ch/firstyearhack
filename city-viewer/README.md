@@ -18,11 +18,13 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 | 4 | Drive or ride the nearest available vehicle | W/S accelerate/brake (hold S to back up) · A/D steer · Space brake · V change vehicle · C chase/first-person camera · R back on the road |
 | 5 | Strand car | WASD/arrows drive · Space handbrake · V chase/overhead · E exit or re-enter on foot |
 
-The opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
+After the loading artwork and 1997 boot sequence, the opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
 
 Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. A hard crash in either Strand car dispatches a flashing patrol car to chase the driver along the streets. Escape at the red phone box with E (Enter for P2), or press R in Strand car or Walk mode. Pickups, deliveries and police pursuits automatically activate 1997 mode. The normal view returns when both the job and the chase are over.
 
-Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. The phone controls P2 in two-car mode.
+Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. Connecting a phone starts two-car mode and assigns the phone to P2. The scanner on the controller turns a photo into a paper cut-out carried by the player.
+
+The first mission is the Exam Paper Heist. Collect the papers at Bush House, escape the patrol at the red phone box, and deliver them to Somerset House. Open `?demo=1` to show the controller QR code after the intro. Press K for a spoken incident report. To enable live Snowflake reports, copy `city-viewer/.env.example` to `city-viewer/.env` and fill in your Snowflake settings. The report has a local fallback.
 
 T runs/pauses time, H hides the UI, and clicking the minimap moves you there.
 

@@ -25,7 +25,7 @@ http.createServer((req, res) => {
     return res.end('Invalid URL');
   }
   const file = path.resolve(root, urlPath.slice(1) || 'index.html');
-  if (!file.startsWith(root + path.sep) || file.includes('\0')) {
+  if (urlPath.split('/').some(part => part.startsWith('.')) || !file.startsWith(root + path.sep) || file.includes('\0')) {
     res.writeHead(403);
     return res.end();
   }

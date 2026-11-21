@@ -8,6 +8,7 @@
 // GET /api/info tells the game this laptop's Wi-Fi address (for the QR code).
 
 const os = require('os');
+const { writePoliceReport } = require('./snowflake.js');
 
 const clients = { game: new Set(), phone: new Set() };
 
@@ -22,9 +23,9 @@ setInterval(() => {
   for (const set of Object.values(clients)) for (const res of set) res.write(': ping\n\n');
 }, 15000);
 
-function readJson(req, done) {
+function readJson(req, done, maxLength = 10000) {
   let body = '';
-  req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+  req.on('data', (c) => { body += c; if (body.length > maxLength) req.destroy(); });
   req.on('end', () => { try { done(JSON.parse(body || '{}')); } catch { done(null); } });
 }
 
@@ -48,6 +49,7 @@ function handle(req, res, port) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     res.write(': connected\n\n');
     clients[role].add(res);
+    if (role === 'game') res.write(`event: phones\ndata: ${JSON.stringify({ count: clients.phone.size })}\n\n`);
     if (role === 'phone') send('game', 'phones', { count: clients.phone.size });
     req.on('close', () => {
       clients[role].delete(res);
@@ -63,6 +65,25 @@ function handle(req, res, port) {
       }
       res.writeHead(204);
       res.end();
+    });
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/scan') {
+    // Phone took a photo of an item: pass it on to the game (photos are big, allow ~3 MB).
+    readJson(req, (data) => {
+      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image });
+      res.writeHead(204);
+      res.end();
+    }, 3_000_000);
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/report') {
+    // Game finished: ask Snowflake Cortex for the police report (null = use the backup).
+    readJson(req, async (stats) => {
+      let result = null, error = null;
+      try { result = await writePoliceReport(stats || {}); } catch (e) { error = e.message; console.log('Snowflake:', error); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ text: result && result.text, log: result && result.log, error }));
     });
     return true;
   }

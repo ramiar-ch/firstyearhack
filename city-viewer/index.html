@@ -53,7 +53,7 @@
   .view-hud .vh-name{position:absolute;left:20px;top:10px;font:700 13px/1.2 "Segoe UI",system-ui,sans-serif;color:#fff;text-shadow:0 1px 3px #000}
   .view-hud .vh-street{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:#fff;color:#111;border:2px solid #111;border-radius:3px;padding:3px 12px;font:700 14px/1.2 "Segoe UI",Arial,sans-serif;white-space:nowrap;max-width:90%;overflow:hidden;text-overflow:ellipsis}
   #debugPlay{margin-top:8px}
-  #loading{position:fixed;inset:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:#050507;z-index:10;transition:opacity .6s}
+  #loading{position:fixed;inset:0;display:grid;grid-template-rows:minmax(0,1fr) auto;background:#050507;z-index:15;transition:opacity .6s}
   #loading img{display:block;width:100%;height:100%;object-fit:contain}
   #loading .load-status{width:min(85%,560px);margin:0 auto;padding:10px 0 max(16px,env(safe-area-inset-bottom));color:#eee;text-align:center}
   #loading .bar{height:6px;margin-top:7px;background:#383841;border-radius:3px;overflow:hidden}
@@ -130,6 +130,28 @@
   body.split #side{display:none} /* the Places panel would cover P2's view */
   body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:3px;margin-left:-1px;background:#05070d;z-index:3;pointer-events:none}
   .hidden-ui #twop-btn,.hidden-ui #speedo2{display:none!important}
+  /* Police report from Snowflake (game/report.js) */
+  #report{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(5,7,13,.7)}
+  #report .r-card{width:min(620px,92vw);background:#f4f1e8;color:#1a1a1a;border-radius:6px;padding:22px 26px;font-family:"Courier New",monospace}
+  #report .r-head{font:900 18px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.06em;color:#0b2a6b;border-bottom:3px solid #0b2a6b;padding-bottom:8px}
+  #report .r-ref{font-size:13px;color:#555;margin:8px 0 12px}
+  #report .r-text{font-size:16px;line-height:1.5;white-space:pre-wrap;margin:0 0 14px}
+  /* 1997 boot screen at the start (game/boot.js) */
+  #boot{position:fixed;inset:0;z-index:12;padding:6vh 7vw;background:rgba(0,0,8,.72);color:#9dff9d;pointer-events:none;
+    font:700 clamp(15px,2.2vw,26px)/1.45 "Courier New",monospace}
+  #boot pre{margin:0;font:inherit;white-space:pre-wrap}
+  #boot .boot-cursor{animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  /* Scanned weapon held in your hand when walking (game/scanItem.js) */
+  #held-item{position:fixed;right:6%;bottom:-2%;z-index:3;display:none;pointer-events:none;text-align:center;
+    transform:rotate(-12deg);animation:hold-bob 1.1s ease-in-out infinite alternate}
+  #held-item img{display:block;max-height:34vh;max-width:28vw;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+  #held-item span{display:inline-block;margin-bottom:28px;padding:3px 10px;border-radius:8px;background:rgba(0,0,0,.6);font-weight:700;font-size:14px}
+  body.on-foot #held-item{display:block}
+  @keyframes hold-bob{to{transform:rotate(-8deg) translateY(-10px)}}
+  #report .r-log{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#444}
+  #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
+  #report .r-close{margin-top:10px;font-size:13px;color:#666}
 </style>
 </head>
 <body>
@@ -210,12 +232,15 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { DrivableCar } from './game/car.js';
 import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
 import { IntroSwoop } from './game/intro.js';
+import { playBoot } from './game/boot.js';
 import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
 import { PolicePatrol } from './game/police.js';
 import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
+import { PoliceReport } from './game/report.js';
+import { makeCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
 
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
@@ -1485,7 +1510,7 @@ function onPlayersChanged(){
 function setMode(m,requestedKind,spawnAt){
   if(m===mode)return;
   if(m==='drive'){
-    const src=spawnAt||(mode==='orbit'?controls.target:mode==='walk'?player.pos:camera.position);
+    const src=spawnAt||(mode==='orbit'?controls.target:mode==='walk'?player.pos:mode==='strand'?car.position:camera.position);
     const candidate=!spawnAt&&nearestVehicle(src.x,src.z,requestedKind,Infinity);
     if(candidate)takeVehicle(candidate);
     else if(!spawnCar(src.x,src.z,requestedKind||'car')){
@@ -1932,6 +1957,7 @@ function setupUI(){
     if(e.code==='Digit4')setMode('drive');
     if(!e.repeat){
       if(e.code==='KeyR'&&(mode==='strand'||mode==='walk'))warp.escape();
+      if(e.code==='KeyK'&&report&&!report.hide())report.show(missions.money);
       if(e.code==='KeyP')phone.toggleQr();
       if(e.code==='KeyG')toggleSplit();
       if(e.code==='Enter')p2Action();
@@ -2053,7 +2079,7 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
   if(timePlaying){hours=(hours+dt*timeSpeed/60)%24;lightTick+=dt;if(lightTick>0.25){lightTick=0;document.getElementById('time').value=hours;updateLighting();}}
   const ph=uTime.value%30;sigPhase=ph<14?0:ph<17?1:2;if(SIG_MATS){SIG_MATS[0].emissiveIntensity=sigPhase===2?3:0;SIG_MATS[1].emissiveIntensity=sigPhase===1?3:0;SIG_MATS[2].emissiveIntensity=sigPhase===0?3:0;BEACON_MAT.emissiveIntensity=(uTime.value%1.2)<0.6?2.5:0.1;}
   // A slow first render can consume the entire swoop before the loading overlay fades.
-  if(intro)intro.update(Math.min(elapsed,0.1));else if(mode==='strand')updateStrandCar(dt);else if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
+  if(intro){if(!boot)intro.update(Math.min(elapsed,0.1));}else if(mode==='strand')updateStrandCar(dt);else if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
   checkNearCar();
   updateMissions(dt);
   if(lifeRoot.visible)updateTraffic(dt);
@@ -2123,7 +2149,10 @@ let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
+let report=null;     // end-of-match police report from Snowflake Cortex (PoliceReport)
+const DEMO=new URLSearchParams(location.search).get('demo')==='1'; // ?demo=1 = Demo Mode
 let driveCam=null;   // camera that follows the car (DriveCamera)
+let boot=null;
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
 let nearCarShown=false;
 const ENTER_DISTANCE=5; // metres from the car's centre to get in
@@ -2175,7 +2204,7 @@ function updateStrandCar(dt){
   const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
-  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted('p1',car.position);} // crash = police alert
+  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);warp.raiseWanted('p1',car.position);} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
@@ -2226,10 +2255,37 @@ function startMissions(){
   // Phone controller: its E button = the keyboard's E; game events make it vibrate.
   phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
   split=new SplitScreen(scene,renderer,strandCarBlocked);
+  // A phone scanned the QR code and joined -> turn on 2 players automatically (the phone drives P2).
+  phone.onPhonesChange=n=>{if(n>0&&!split.on&&!intro)toggleSplit();};
   const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
   twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
-  missions.onEvent=e=>phone.haptic(HAPTICS[e]);
-  warp.onEvent=e=>phone.haptic(HAPTICS[e]);
+  // Everything that happens: buzz the phone + remember it for the Snowflake police report.
+  report=new PoliceReport();
+  missions.onEvent=(e,who)=>{
+    if(e==='escape'){
+      const second=who===1&&split.on;
+      warp.raiseWanted(second?'p2':'p1',second?split.car2.position:mode==='walk'?player.pos:car.position);
+      return;
+    }
+    phone.haptic(HAPTICS[e]);report.log(e,who);
+  };
+  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
+  // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
+  // (on the car roof; in your hand when walking). The phone's owner gets it:
+  // P2 in split screen, otherwise P1.
+  phone.onScan=async url=>{
+    try{
+      const cut=await makeCutout(url),name=funnyName();
+      if(split.on)holdInCar(split.car2,cut);else{holdInCar(car,cut);holdInHand(cut,name);}
+      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name}`,'passed');
+      phone.haptic(HAPTICS.pickup);
+    }catch(e){showToast('Scan failed - try again');}
+  };
+  // INTRO MISSION "Exam Paper Heist" (always the first job): grab the KCL exam
+  // papers at Bush House -> the police come -> hide in the red phone box
+  // -> finish the delivery at Somerset House.
+  missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'the stolen KCL exam papers',
+    escape:{name:'red phone box',x:warp.position.x,z:warp.position.z,done:()=>!warp.wanted}}];
   // Handy for debugging: type `game` in the browser console (F12).
   window.game={car,missions,player,setMode};
 }
@@ -2238,11 +2294,13 @@ function updateMissions(dt){
   const active=!intro&&(mode==='strand'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='walk'?player.pos:car.position;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted('p2',split.car2.position);}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);warp.raiseWanted('p2',split.car2.position);}
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   const target=warp.wanted==='p2'&&split.on?split.car2.position:pos;
-  warp.update(dt,missions.state!=='waiting',target);
+  if(!intro)warp.update(dt,missions.state!=='waiting',target);
+  swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
+  document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
 }
 
 // G: turn 2-player split screen on/off (P1 is put in their car).
@@ -2250,6 +2308,7 @@ function toggleSplit(){
   if(intro||!car)return;
   if(mode!=='strand')setMode('strand');
   const on=split.toggle(car);
+  if(on)report.stats.players=2;
   labelRenderer.domElement.style.display=on?'none':'';
   if(!on&&warp.wanted==='p2')warp.escape();
   if(!on)onResize(); // give P1's camera the full screen shape back
@@ -2264,9 +2323,17 @@ function p2Action(){
 // The 3-second swoop from high above London down to the car at KCL.
 // Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
 function startIntro(){
-  const done=()=>{intro=null;setMode('strand');};
+  const done=()=>{
+    if(boot){boot.cancel();boot=null;}
+    intro=null;
+    setMode('strand');
+    if(phone.phones)phone.onPhonesChange(phone.phones);
+    else if(DEMO)phone.toggleQr();
+  };
   if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
   controls.enabled=false;
+  // Open "in 1997" (boot screen), flash to 2026, then swoop down onto KCL.
+  boot=playBoot(warp,()=>{boot=null;});
   intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done);
 }
 

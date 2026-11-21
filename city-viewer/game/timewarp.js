@@ -47,13 +47,17 @@ export class TimeWarp {
   escape() {
     if (!this.wanted) return;
     this.onEvent('warp');
-    this.flash.classList.remove('go');
-    void this.flash.offsetWidth; // restart the CSS animation
-    this.flash.classList.add('go');
+    this.flashScreen();
     this.wanted = null;
     this.patrol.mesh.visible = false;
     this.alert.style.display = 'none';
     this.stopSiren();
+  }
+
+  flashScreen() {
+    this.flash.classList.remove('go');
+    void this.flash.offsetWidth; // restart the CSS animation
+    this.flash.classList.add('go');
   }
 
   setRetro(on) {

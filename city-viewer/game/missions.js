@@ -90,7 +90,15 @@ export class MissionManager {
 
   newJob(pos) {
     this.item = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-    this.pickup = this.pickPlace(pos.x, pos.z, 120, 500, null);
+    this.pickup = this.pickPlace(pos.x, pos.z, 60, 250, null); // close by = quick jobs
+    // Planned job (the intro mission) instead of a random one (see `script`).
+    const planned = this.script && this.script.shift();
+    if (planned) {
+      this.pickup = this.places.find((p) => p.name === planned.pickup) ?? this.pickup;
+      this.plannedDropoff = this.places.find((p) => p.name === planned.dropoff);
+      this.plannedEscape = planned.escape ?? null; // optional "lose the police" stop in between
+      if (planned.item) this.item = planned.item;
+    }
     this.dropoff = null;
     this.state = 'pickup';
     placeBeam(this.pickupBeam, this.pickup);
@@ -98,15 +106,31 @@ export class MissionManager {
     this.showBanner('NEW JOB', `Pick up ${this.item} at ${this.pickup.name}`, 'info');
   }
 
-  collect() {
-    this.dropoff = this.pickPlace(this.pickup.x, this.pickup.z, 250, 800, this.pickup);
+  collect(who = 0) {
+    this.onEvent('pickup', who);
+    // Intro mission: first you have to lose the police (hide in the phone box).
+    if (this.plannedEscape) {
+      this.escape = this.plannedEscape;
+      this.plannedEscape = null;
+      this.state = 'escape';
+      this.pickupBeam.visible = false;
+      this.onEvent('escape', who);
+      this.showBanner('THE MET IS ONTO YOU!', `Hide in the ${this.escape.name} (press E there)`, 'failed');
+      return;
+    }
+    this.startDropoff();
+  }
+
+  startDropoff() {
+    this.dropoff = this.plannedDropoff ?? this.pickPlace(this.pickup.x, this.pickup.z, 120, 350, this.pickup);
     const dist = Math.hypot(this.dropoff.x - this.pickup.x, this.dropoff.z - this.pickup.z);
-    // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit.
-    this.timeLeft = Math.ceil((dist / 9 + 20) / 5) * 5;
+    // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit
+    // (planned demo jobs get extra time so nobody fails on stage).
+    this.timeLeft = Math.ceil((dist / 9 + (this.plannedDropoff ? 60 : 20)) / 5) * 5;
+    this.plannedDropoff = null;
     this.state = 'dropoff';
     this.pickupBeam.visible = false;
     placeBeam(this.dropoffBeam, this.dropoff);
-    this.onEvent('pickup');
     this.showBanner('PARCEL COLLECTED', `Deliver to ${this.dropoff.name} · ${this.timeLeft} s`, 'info');
   }
 
@@ -115,7 +139,7 @@ export class MissionManager {
     this.dropoffBeam.visible = false;
     this.state = 'waiting';
     this.wait = NEXT_JOB_DELAY;
-    this.onEvent(success ? 'passed' : 'failed');
+    this.onEvent(success ? 'passed' : 'failed', who);
     if (success) {
       this.money += REWARD;
       this.moneyBy[who] += REWARD;
@@ -164,7 +188,14 @@ export class MissionManager {
       this.wait -= dt;
       if (this.wait <= 0) this.newJob(pos);
     } else if (this.state === 'pickup') {
-      if (arrived(this.pickup) >= 0) this.collect();
+      const who = arrived(this.pickup);
+      if (who >= 0) this.collect(who);
+    } else if (this.state === 'escape') {
+      // Waiting for the player to warp to 1997 in the phone box.
+      if (this.escape.done()) {
+        this.startDropoff();
+        this.showBanner('POLICE LOST - IT\'S 1997!', `Now deliver to ${this.dropoff.name}`, 'info');
+      }
     } else if (this.state === 'dropoff') {
       this.timeLeft -= dt;
       const who = arrived(this.dropoff);
@@ -176,13 +207,15 @@ export class MissionManager {
 
   updateHud(pos, cameraHeading) {
     const task = this.hud.querySelector('.m-task');
-    const target = this.state === 'pickup' ? this.pickup : this.state === 'dropoff' ? this.dropoff : null;
+    const target = this.currentTarget();
     task.style.display = target ? 'flex' : 'none';
     if (!target) return;
 
     task.className = `m-task ${this.state}`;
     this.hud.querySelector('.m-title').textContent =
-      this.state === 'pickup' ? `PICK UP · ${this.pickup.name}` : `DELIVER · ${this.dropoff.name}`;
+      this.state === 'pickup' ? `PICK UP · ${this.pickup.name}`
+        : this.state === 'escape' ? `LOSE THE POLICE · ${this.escape.name} (E)`
+        : `DELIVER · ${this.dropoff.name}`;
     this.hud.querySelector('.m-sub').textContent = `${Math.round(dist2d(pos, target))} m · ${this.item}`;
 
     // Arrow: which way the target is, compared with where the camera looks.
@@ -197,6 +230,14 @@ export class MissionManager {
     } else timer.textContent = '';
   }
 
+  /** Where the player should go right now (or null between jobs). */
+  currentTarget() {
+    if (this.state === 'pickup') return this.pickup;
+    if (this.state === 'escape') return this.escape;
+    if (this.state === 'dropoff') return this.dropoff;
+    return null;
+  }
+
   /** Draw the target on the viewer's minimap. toMap(v) turns metres into minimap pixels. */
   drawOnMinimap(ctx, toMap, playRadius) {
     // Play-area circle.
@@ -206,9 +247,9 @@ export class MissionManager {
     ctx.arc(toMap(0), toMap(0), toMap(playRadius) - toMap(0), 0, Math.PI * 2);
     ctx.stroke();
     // Current target.
-    const target = this.state === 'pickup' ? this.pickup : this.state === 'dropoff' ? this.dropoff : null;
+    const target = this.currentTarget();
     if (!target) return;
-    ctx.fillStyle = this.state === 'pickup' ? '#ff8c1a' : '#3a8bff';
+    ctx.fillStyle = this.state === 'pickup' ? '#ff8c1a' : this.state === 'escape' ? '#ff2a3a' : '#3a8bff';
     ctx.strokeStyle = '#111';
     ctx.lineWidth = 3;
     ctx.beginPath();
