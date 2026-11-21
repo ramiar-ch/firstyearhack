@@ -52,6 +52,13 @@
   .lbl.kcl{background:#c8102e;border-color:#ff9aa8}
   .lbl:hover{background:#fff;color:#111}
   @media (max-width:760px){#side{width:210px;max-height:50vh}#help{display:none}#minimap{width:140px;height:140px}.modes button{padding:5px 6px}}
+  /* ---- Game additions: driving + intro (see game/*.js) ---- */
+  #speedo{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);display:none;pointer-events:none;
+    font:800 30px/1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.7)}
+  #speedo small{font-size:14px;font-weight:600;margin-left:4px;color:var(--muted)}
+  .intro-caption{position:fixed;left:50%;bottom:12%;transform:translateX(-50%);opacity:0;pointer-events:none;z-index:6;
+    font:800 clamp(20px,3.2vw,40px)/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.3em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);white-space:nowrap}
+  .hidden-ui #speedo{display:none!important}
 </style>
 </head>
 <body>
@@ -64,6 +71,7 @@
       <button data-mode="orbit" class="active"><kbd>1</kbd><span data-i18n="modeOrbit">Orbit</span></button>
       <button data-mode="walk"><kbd>2</kbd><span data-i18n="modeWalk">Walk</span></button>
       <button data-mode="fly"><kbd>3</kbd><span data-i18n="modeFly">Fly</span></button>
+      <button data-mode="drive"><kbd>4</kbd><span data-i18n="modeDrive">Drive</span></button>
     </div>
     <button id="lang" title="Language / 语言">中文</button>
   </div>
@@ -92,6 +100,8 @@
   <div class="panel" id="help"></div>
   <div class="panel" id="mapwrap"><canvas id="minimap" width="440" height="440"></canvas><div id="coords"><span id="cxy"></span><span id="calt"></span></div></div>
   <div id="street"></div>
+  <div id="speedo"></div><!-- game addition: speed while driving -->
+
   <div id="crosshair"></div>
   <div id="lockhint" data-i18n="lockHint">Click to lock the view (or hold the left button and drag) · Esc to release</div>
   <div id="fps">-- FPS</div>
@@ -114,6 +124,10 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+// Game additions (our own files): drivable car, driving camera, intro swoop.
+import { DrivableCar } from './game/car.js';
+import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
+import { IntroSwoop } from './game/intro.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -127,7 +141,9 @@ const I18N={
     helpOrbit:'<b>Orbit</b>　<span class="k">Left drag</span> rotate · <span class="k">Right drag</span> pan · <span class="k">Wheel</span> zoom · <span class="k">WASD</span> move · <span class="k">Q/E</span> turn',
     helpWalk:'<b>Walk</b>　<span class="k">Click</span> lock mouse · <span class="k">WASD</span> walk · <span class="k">Shift</span> jog · <span class="k">Space</span> jump · <span class="k">Esc</span> release mouse',
     helpFly:'<b>Fly</b>　<span class="k">WASD</span> move · <span class="k">Space/E</span> up · <span class="k">C/Q</span> down · <span class="k">Shift</span> faster · <span class="k">Wheel</span> speed',
-    helpCommon:'<span class="k">1-3</span> switch mode · <span class="k">T</span> run time · <span class="k">H</span> hide UI · click the minimap to go there',
+    helpCommon:'<span class="k">1-4</span> switch mode · <span class="k">T</span> run time · <span class="k">H</span> hide UI · click the minimap to go there',
+    modeDrive:'Drive',helpDrive:'<b>Drive</b>　<span class="k">WASD/arrows</span> drive · <span class="k">Space</span> handbrake · <span class="k">E</span> get out · <span class="k">V</span> change view',
+    carIn:'In the car · E to get out',carOut:'On foot · E near the car to get in',carNear:'Press E to get in the car',crash:'Crash!',viewChase:'Chase view',viewOverhead:'Overhead view',
     timeOn:'Time running',timeOff:'Time paused',flySpeed:v=>`Fly speed ${v} m/s`,fromKCL:v=>`${v} m from KCL`,
     load1:'Reading street and building data…',load2:'Laying roads, the Thames and bridges…',load3:n=>`Building ${n} buildings…`,load4:'Planting trees, lamps and street furniture…',load5:'Releasing traffic and pedestrians…',done:'Done',loadFail:'Failed to load: '},
   zh:{docTitle:'伦敦 · KCL 周边',loadTitle:'伦敦 · KCL 周边 2 km',brand:'伦敦 · KCL 周边',modeOrbit:'环绕视角',modeWalk:'街道漫步',modeFly:'自由飞行',places:'地点',time:'时间',
@@ -138,7 +154,9 @@ const I18N={
     helpOrbit:'<b>环绕视角</b>　<span class="k">左键</span> 旋转 · <span class="k">右键</span> 平移 · <span class="k">滚轮</span> 缩放 · <span class="k">WASD</span> 移动 · <span class="k">Q/E</span> 转向',
     helpWalk:'<b>街道漫步</b>　<span class="k">点击</span> 锁定鼠标 · <span class="k">WASD</span> 步行 · <span class="k">Shift</span> 小跑 · <span class="k">空格</span> 跳 · <span class="k">Esc</span> 释放鼠标',
     helpFly:'<b>自由飞行</b>　<span class="k">WASD</span> 移动 · <span class="k">空格/E</span> 上升 · <span class="k">C/Q</span> 下降 · <span class="k">Shift</span> 加速 · <span class="k">滚轮</span> 调速',
-    helpCommon:'<span class="k">1-3</span> 切换模式 · <span class="k">T</span> 时间流动 · <span class="k">H</span> 隐藏界面 · 小地图点击可前往',
+    helpCommon:'<span class="k">1-4</span> 切换模式 · <span class="k">T</span> 时间流动 · <span class="k">H</span> 隐藏界面 · 小地图点击可前往',
+    modeDrive:'驾驶',helpDrive:'<b>驾驶</b>　<span class="k">WASD/方向键</span> 驾驶 · <span class="k">空格</span> 手刹 · <span class="k">E</span> 下车 · <span class="k">V</span> 切换视角',
+    carIn:'已上车 · 按 E 下车',carOut:'步行 · 靠近汽车按 E 上车',carNear:'按 E 上车',crash:'撞车！',viewChase:'追尾视角',viewOverhead:'俯视视角',
     timeOn:'时间流动',timeOff:'时间暂停',flySpeed:v=>`飞行速度 ${v} m/s`,fromKCL:v=>`距 KCL ${v}m`,
     load1:'正在解析街道与建筑数据…',load2:'正在铺设路面、泰晤士河与桥梁…',load3:n=>`正在建造 ${n} 栋建筑…`,load4:'正在种树、安装路灯与街道设施…',load5:'正在放出行人和车辆…',done:'完成',loadFail:'加载失败：'}};
 let LANG='en';try{if(localStorage.getItem('kclCityLang')==='zh')LANG='zh';}catch(e){}
@@ -921,7 +939,9 @@ function setMode(m){if(m===mode)return;const prev=mode;mode=m;controls.enabled=m
   if(m==='walk'){const src=prev==='orbit'?controls.target:camera.position;const p=freeSpot(src.x,src.z);player.pos.set(p.x,0,p.z);player.pitch=0;}
   if(m==='fly')player.pos.copy(camera.position);
   if(m==='orbit'){const t=camera.position.clone().addScaledVector(dir,prev==='walk'?15:120);t.y=Math.max(0,Math.min(t.y,40));controls.target.copy(t);if(prev==='walk'){const back=new THREE.Vector3(dir.x,0,dir.z).normalize();camera.position.set(t.x-back.x*60,45,t.z-back.z*60);}controls.update();}
-  document.querySelectorAll('.modes button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));document.getElementById('street').style.display=m==='walk'?'block':'none';updateHelp();showToast(i18n({orbit:'modeOrbit',walk:'modeWalk',fly:'modeFly'}[m]));}
+  if(m==='drive')driveCam.snap(car); // game addition: jump the camera behind the car
+  document.getElementById('speedo').style.display=m==='drive'?'block':'none';
+  document.querySelectorAll('.modes button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));document.getElementById('street').style.display=(m==='walk'||m==='drive')?'block':'none';updateHelp();showToast(i18n({orbit:'modeOrbit',walk:'modeWalk',fly:'modeFly',drive:'carIn'}[m]));}
 function updateWalk(dt){const f=(key('KeyW')||key('ArrowUp')?1:0)-(key('KeyS')||key('ArrowDown')?1:0),r=(key('KeyD')||key('ArrowRight')?1:0)-(key('KeyA')||key('ArrowLeft')?1:0);
   const sp=(key('ShiftLeft')||key('ShiftRight'))?5.5:1.7;const fx=-Math.sin(player.yaw),fz=-Math.cos(player.yaw),rx=Math.cos(player.yaw),rz=-Math.sin(player.yaw);let mx=fx*f+rx*r,mz=fz*f+rz*r;const ml=Math.hypot(mx,mz);if(ml>0){mx/=ml;mz/=ml;}
   const k=1-Math.exp(-dt*8);player.vel.x=lerp(player.vel.x,mx*sp,k);player.vel.z=lerp(player.vel.z,mz*sp,k);moveWalk(player.pos,player.vel.x*dt,player.vel.z*dt);
@@ -943,7 +963,7 @@ function flyTo(t,off){if(mode==='walk'){const o=off.clone();o.y=0;o.normalize();
    UI / 标签 / 小地图
    ========================================================= */
 let toastT;function showToast(s){const t=document.getElementById('toast');t.textContent=s;t.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>t.style.opacity=0,1500);}
-function updateHelp(){document.getElementById('help').innerHTML=i18n({orbit:'helpOrbit',walk:'helpWalk',fly:'helpFly'}[mode])+'<br>'+i18n('helpCommon');
+function updateHelp(){document.getElementById('help').innerHTML=i18n({orbit:'helpOrbit',walk:'helpWalk',fly:'helpFly',drive:'helpDrive'}[mode])+'<br>'+i18n('helpCommon');
   const fp=mode==='walk'||mode==='fly';document.getElementById('crosshair').style.display=fp?'block':'none';updateLockHint();}
 function updateLockHint(){const fp=mode==='walk'||mode==='fly';document.getElementById('lockhint').style.display=fp&&!document.pointerLockElement?'block':'none';}
 const labels=[];
@@ -968,8 +988,10 @@ function setupUI(){
   document.getElementById('optFog').onchange=e=>{fogOn=e.target.checked;scene.fog=fogOn?fog:null;};
   document.getElementById('optMap').onchange=e=>{document.getElementById('mapwrap').style.display=e.target.checked?'':'none';};
   document.getElementById('quality').onchange=e=>{applyQuality(e.target.value);e.target.blur();};
-  addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
+  addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
+    keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1002,7 +1024,8 @@ const clk=new THREE.Clock();let fpsAcc=0,fpsN=0,lightTick=0,lblTick=0,streetTick
 function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0.05);uTime.value+=dt;
   if(timePlaying){hours=(hours+dt*timeSpeed/60)%24;lightTick+=dt;if(lightTick>0.2){lightTick=0;document.getElementById('time').value=hours;updateLighting();}}
   const ph=uTime.value%30;const np=ph<14?0:ph<17?1:2;if(np!==sigPhase){sigPhase=np;}if(SIG_MATS){SIG_MATS[0].emissiveIntensity=sigPhase===2?3:0;SIG_MATS[1].emissiveIntensity=sigPhase===1?3:0;SIG_MATS[2].emissiveIntensity=sigPhase===0?3:0;BEACON_MAT.emissiveIntensity=(uTime.value%1.2)<0.6?2.5:0.1;}
-  if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else updateFly(dt);
+  if(intro)intro.update(dt);else if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
+  checkNearCar(); // game addition
   if(lifeRoot.visible)updateLife(dt);
   let size=110;if(mode==='orbit'){_focus.copy(controls.target);size=clamp(camera.position.distanceTo(controls.target)*0.75,60,900);}else{const d=new THREE.Vector3();camera.getWorldDirection(d);d.y=0;d.normalize();_focus.copy(camera.position).addScaledVector(d,size*0.55);if(mode==='fly')size=clamp(camera.position.y*1.5,110,900);}
   _focus.y=0;_focus.x=Math.round(_focus.x/2)*2;_focus.z=Math.round(_focus.z/2)*2;const sc=sun.shadow.camera;if(Math.abs(sc.right-size)>size*0.08){sc.left=sc.bottom=-size;sc.right=sc.top=size;sc.updateProjectionMatrix();}
@@ -1010,11 +1033,76 @@ function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0
   if(EYE){EYE.wheel.rotation.z+=dt*0.0035;for(const c of EYE.caps)c.rotation.z=-EYE.wheel.rotation.z;}
   waterNormal.offset.x+=dt*0.0008;waterNormal.offset.y+=dt*0.0005;
   if((lblTick+=dt)>0.25&&labelsOn){lblTick=0;for(const L of labels){const d=camera.position.distanceTo(L.o.position);L.o.visible=mode!=='walk'&&d<(L.kcl?3000:1600)&&d>40;}}
-  if(mode==='walk'&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
+  if((mode==='walk'||mode==='drive')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
   if(bloomOn&&night>0.08)composer.render();else renderer.render(scene,camera);labelRenderer.render(scene,camera);drawMinimap();
   fpsAcc+=dt;fpsN++;if(fpsAcc>0.5){document.getElementById('fps').textContent=`${Math.round(fpsN/fpsAcc)} FPS`;fpsAcc=0;fpsN=0;const p=mode==='orbit'?controls.target:camera.position;
     document.getElementById('cxy').textContent=`${(LAT0-p.z/KZ).toFixed(4)}°N ${Math.abs(LON0+p.x/KX).toFixed(4)}°W`;document.getElementById('calt').textContent=i18n('fromKCL',Math.hypot(p.x,p.z).toFixed(0));}}
 function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;return 1e9;}
+
+/* =========================================================
+   GAME ADDITIONS: drivable car + intro swoop
+   (the car itself is in game/car.js, the cameras in game/driveCamera.js
+    and game/intro.js - this part just connects them to the viewer)
+   ========================================================= */
+let car=null;        // the drivable car (DrivableCar)
+let driveCam=null;   // camera that follows the car (DriveCamera)
+let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
+let nearCarShown=false;
+const ENTER_DISTANCE=5; // metres from the car's centre to get in
+
+// Park the car on the Strand right in front of the KCL Strand Building.
+// (0,0) is KCL; the Strand runs past ~70 m north of it.
+function spawnCar(){
+  const f=roadFrameFast(-34,-72,40)||{px:-34,pz:-72,tx:1,tz:0};
+  let tx=f.tx,tz=f.tz;if(tx<0){tx=-tx;tz=-tz;}          // point east along the Strand
+  const heading=Math.atan2(-tx,-tz);                     // car "forward" is -z in its model
+  car=new DrivableCar(f.px,f.pz,heading,blockedAt);
+  // If that exact spot touches a wall, slide along the road until it's clear.
+  for(let s=0;s<60&&car.hits(car.position.x,car.position.z,heading);s++){
+    const d=(s%2?1:-1)*Math.ceil(s/2)*2;car.position.set(f.px+tx*d,0,f.pz+tz*d);}
+  scene.add(car.mesh);
+  driveCam=new DriveCamera(camera);
+}
+
+// One frame of driving: keyboard -> car -> camera -> speedometer.
+function updateDrive(dt){
+  const input={
+    throttle:key('KeyW')||key('ArrowUp')?1:0,
+    brake:key('KeyS')||key('ArrowDown')?1:0,
+    steer:(key('KeyA')||key('ArrowLeft')?1:0)-(key('KeyD')||key('ArrowRight')?1:0),
+    handbrake:key('Space'),
+  };
+  if(car.update(dt,input))showToast(i18n('crash'));
+  driveCam.update(dt,car);
+  document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
+}
+
+// E: get in (when walking next to the car) or get out (when driving).
+function toggleCar(){
+  if(mode==='drive'){
+    // Step out of the driver's door (right-hand side in the UK) onto free ground.
+    const fwd=car.forward();const p=freeSpot(car.position.x-fwd.z*2.4,car.position.z+fwd.x*2.4);
+    setMode('walk');player.pos.set(p.x,0,p.z);player.yaw=car.heading;player.pitch=0;showToast(i18n('carOut'));
+  }else if(mode==='walk'&&player.pos.distanceTo(car.position)<ENTER_DISTANCE){
+    setMode('drive');
+  }
+}
+
+// While walking, say "Press E" once when you come close to the car.
+function checkNearCar(){
+  if(mode!=='walk'||!car)return;
+  const near=player.pos.distanceTo(car.position)<ENTER_DISTANCE;
+  if(near&&!nearCarShown)showToast(i18n('carNear'));nearCarShown=near;
+}
+
+// The 3-second swoop from high above London down to the car at KCL.
+// Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
+function startIntro(){
+  const done=()=>{intro=null;setMode('drive');};
+  if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
+  controls.enabled=false;
+  intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done);
+}
 
 /* =========================================================
    启动
@@ -1032,6 +1120,7 @@ async function init(){
   buildTrees();buildLamps();buildProps();buildEye();
   setLoad(i18n('load5'),0.85);await nextFrame();
   buildLife();buildLabels();buildMinimap();setupUI();onResize();updateLighting();controls.update();
+  spawnCar();startIntro(); // game addition: car at KCL Strand + intro swoop
   setLoad(i18n('done'),1);await nextFrame();frame();const ld=document.getElementById('loading');ld.style.opacity=0;setTimeout(()=>ld.remove(),700);
 }
 init().catch(e=>{console.error(e);document.getElementById('loadmsg').textContent=i18n('loadFail')+e.message;});
