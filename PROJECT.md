@@ -2,7 +2,7 @@
 
 Run `npm start` or `npm run dev` from the repository root to start the Strand City Viewer at [localhost:8080](http://localhost:8080/). In IntelliJ IDEA, use the **Strand City Viewer** run configuration.
 
-To play both from the same server, run `npm ci --prefix client` once and `npm run build`, then choose **Two-player game** in the viewer. The original driving demo is at `/game/demo.html`.
+To play both from the same server, run `npm ci --prefix client` once and `npm run build`, then choose **Two-player game** in the viewer. The original driving demo is at `/play/demo.html`.
 
 For development on the two-player character creator and overhead London game, run `npm ci --prefix client` once, then `npm --prefix client run dev`. Open the URL Vite prints. The original single-car driving demo is available at `/demo.html` on that server.
 

@@ -24,11 +24,11 @@ http.createServer((req, res) => {
     res.writeHead(400);
     return res.end('Invalid URL');
   }
-  if (urlPath === '/game') {
-    res.writeHead(302, { Location: '/game/' });
+  if (urlPath === '/play') {
+    res.writeHead(302, { Location: '/play/' });
     return res.end();
   }
-  const game = urlPath.startsWith('/game/');
+  const game = urlPath.startsWith('/play/');
   const directory = game ? gameRoot : root;
   const relative = game ? urlPath.slice(6) : urlPath.slice(1);
   const file = path.resolve(directory, relative || 'index.html');
