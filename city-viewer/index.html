@@ -260,6 +260,7 @@ import { MissionManager } from './game/missions.js';
 import { buildPatrolRoads } from './game/police.js';
 import { TimeWarp } from './game/timewarp.js';
 import { Music } from './game/music.js';
+import { PigeonMan } from './game/pigeonMan.js';
 import { Eras } from './game/eras.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
@@ -2207,6 +2208,7 @@ let car=null;        // the drivable car (DrivableCar)
 let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let music=null;      // Strand FM: modern in 2026, chiptune in 1997 (Music)
 let ringT=0;         // phone box ringing timer
+let pigeonMan=null;  // 1997 has no GPS: follow Pigeon Man instead (PigeonMan)
 let eras=null;       // 1997 vs 2026 London: bollards on the Strand, London Eye (Eras)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
@@ -2354,6 +2356,7 @@ function startMissions(){
   // Warping TO 1997 plays a 90s dial-up modem; coming back plays the whoosh.
   warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);if(e==='warp'){if(!warp.retro)sfx.dialup();else sfx.warp();}};
   music=new Music();
+  pigeonMan=new PigeonMan(scene);
   addEventListener('keydown',()=>{if(music.ctx)music.ctx.resume();});
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
@@ -2399,6 +2402,10 @@ function updateMissions(dt){
   if(!intro&&!music.playing&&!music.started){music.started=true;music.start();} // Strand FM starts after the intro
   // The phone box RINGS when the police are after you and you're close: pick up to escape.
   if(warp.wanted&&!warp.retro&&warp.near(mode==='strand'?car.position:player.pos,45)&&(ringT-=dt)<0){ringT=2.4;sfx.ring();}
+  // 1997 = no GPS: Pigeon Man runs ahead of you to the mission target.
+  const guidedPos=split.on&&phone.phones?split.car2.position:(mode==='strand'?car.position:player.pos);
+  if(pigeonMan.update(dt,guidedPos,missions.currentTarget(),warp.retro&&!intro))
+    missions.showBanner('NO GPS IN 1997','Follow the Pigeon Man!','info');
   // Data blackout: time spent in 1997 leaves no records (shows up in the Snowflake report).
   if(warp.retro&&!intro)report.stats.offGridSeconds=(report.stats.offGridSeconds||0)+dt;
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
