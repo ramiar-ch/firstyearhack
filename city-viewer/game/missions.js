@@ -92,7 +92,7 @@ export class MissionManager {
 
   newJob(pos) {
     this.item = ITEMS[Math.floor(Math.random() * ITEMS.length)];
-    this.pickup = this.pickPlace(pos.x, pos.z, 60, 250, null); // close by = quick jobs
+    this.pickup = this.pickPlace(pos.x, pos.z, 40, 180, null); // close by = quick jobs
     // Planned job (the intro mission) instead of a random one (see `script`).
     const planned = this.script && this.script.shift();
     if (planned) {
@@ -127,7 +127,7 @@ export class MissionManager {
   }
 
   startDropoff() {
-    this.dropoff = this.plannedDropoff ?? this.pickPlace(this.pickup.x, this.pickup.z, 120, 350, this.pickup);
+    this.dropoff = this.plannedDropoff ?? this.pickPlace(this.pickup.x, this.pickup.z, 80, 220, this.pickup);
     const dist = Math.hypot(this.dropoff.x - this.pickup.x, this.dropoff.z - this.pickup.z);
     // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit
     // (planned demo jobs get extra time so nobody fails on stage).

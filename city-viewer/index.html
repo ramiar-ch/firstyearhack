@@ -139,6 +139,9 @@
   body.on-foot #held-item{display:block}
   @keyframes hold-bob{to{transform:rotate(-8deg) translateY(-10px)}}
   #report .r-log{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#444}
+  /* 1997 badge (pager style) */
+  body.retro::before{content:"1997 · PAGER MODE";position:fixed;right:14px;top:14px;z-index:16;padding:4px 10px;background:#0b1a0b;color:#9dff9d;
+    border:2px solid #9dff9d;font:700 14px/1.2 "Courier New",monospace;pointer-events:none}
   /* Wanted stars (game/wanted.js) - original style: orange stars, faint when empty */
   #wanted{position:fixed;left:50%;top:40px;transform:translateX(-50%);z-index:6;display:none;gap:4px;pointer-events:none;
     padding:3px 12px;border-radius:12px;background:rgba(5,7,13,.65)}
@@ -237,6 +240,9 @@ import { PoliceCar } from './game/policeCar.js';
 import { sfx } from './game/audio.js';
 import { Dispatch } from './game/dispatch.js';
 import { WantedLevel } from './game/wanted.js';
+import { RetroLook } from './game/retroLook.js';
+import { Music } from './game/music.js';
+import { Guide } from './game/guide.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1101,7 +1107,7 @@ function setupUI(){
   addEventListener('keydown',e=>{if(intro)return; // game addition: during the intro, a key only skips it
     keys[e.code]=true;if(e.code==='Space'){e.preventDefault();if(!e.repeat)player.jump=true;}
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
-    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyF'&&!e.repeat)throwWeapon(0);if(e.code==='Slash'&&!e.repeat){e.preventDefault();throwWeapon(1);} /* F / slash = throw weapon */if(e.code==='KeyK'&&!e.repeat&&report&&!report.hide())report.show(missions.money); /* K = end match: Snowflake police report */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
+    if(e.code==='Digit4')setMode('drive');if(e.code==='KeyE'&&!e.repeat)toggleCar();if(e.code==='KeyR'&&!e.repeat)warp.warp(); /* R = backup 1997 switch */if(e.code==='KeyP'&&!e.repeat)phone.toggleQr(); /* P = phone QR code */if(e.code==='KeyG'&&!e.repeat)toggleSplit(); /* G = 2 players */if(e.code==='Enter'&&!e.repeat)p2Action(); /* Enter = P2's E */if(e.code==='KeyM'&&!e.repeat&&music)showToast(music.toggle()?'📻 Strand FM 97.7':'Music off');if(e.code==='KeyF'&&!e.repeat)throwWeapon(0);if(e.code==='Slash'&&!e.repeat){e.preventDefault();throwWeapon(1);} /* F / slash = throw weapon */if(e.code==='KeyK'&&!e.repeat&&report&&!report.hide())report.show(missions.money); /* K = end match: Snowflake police report */if(e.code==='KeyV'&&mode==='drive')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');if(e.code.startsWith('Arrow'))e.preventDefault();});
   addEventListener('keyup',e=>{keys[e.code]=false;});addEventListener('blur',()=>{for(const k in keys)keys[k]=false;});
   const el=renderer.domElement;
@@ -1146,7 +1152,7 @@ function frame(){requestAnimationFrame(frame);const dt=Math.min(clk.getDelta(),0
   if((lblTick+=dt)>0.25&&labelsOn){lblTick=0;for(const L of labels){const d=camera.position.distanceTo(L.o.position);L.o.visible=mode!=='walk'&&d<(L.kcl?3000:1600)&&d>40;}}
   if((mode==='walk'||mode==='drive')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
   if(split&&split.on)split.render(camera); // game addition: 2-player split screen (no glow/labels = faster)
-  else{if(bloomOn&&night>0.08)composer.render();else renderer.render(scene,camera);labelRenderer.render(scene,camera);}drawMinimap();if(missions)missions.drawOnMinimap(mmCtx,v=>(v/RH+1)/2*440,PLAY_RADIUS);
+  else{if((bloomOn&&night>0.08)||(retroLook&&retroLook.on))composer.render();else renderer.render(scene,camera);labelRenderer.render(scene,camera);}drawMinimap();if(missions)missions.drawOnMinimap(mmCtx,v=>(v/RH+1)/2*440,PLAY_RADIUS);
   fpsAcc+=dt;fpsN++;if(fpsAcc>0.5){document.getElementById('fps').textContent=`${Math.round(fpsN/fpsAcc)} FPS`;fpsAcc=0;fpsN=0;const p=mode==='orbit'?controls.target:camera.position;
     document.getElementById('cxy').textContent=`${(LAT0-p.z/KZ).toFixed(4)}°N ${Math.abs(LON0+p.x/KX).toFixed(4)}°W`;document.getElementById('calt').textContent=i18n('fromKCL',Math.hypot(p.x,p.z).toFixed(0));}}
 function riverZ(x){for(let z=-1500;z<1500;z+=20)if(isWaterRaw(x,z))return z;return 1e9;}
@@ -1165,6 +1171,10 @@ let police=null;     // police car that chases you during an alert (PoliceCar)
 let roadblocks=null; // giant thrown scanned objects (Roadblocks)
 let squad=[];        // all the police cars (1 per wanted star, max 3)
 let wanted=null;     // wanted level 0-5 stars (WantedLevel)
+let retroLook=null;  // proper 1997 look: palette + dither, fog, chunky textures (RetroLook)
+let music=null;      // Strand FM 97.7 - original 90s-style soundtrack (Music)
+let guide=null;      // arrow + road chevrons + voice updates to the target (Guide)
+let updateGuide=()=>{};
 const DEMO=new URLSearchParams(location.search).get('demo')==='1'; // ?demo=1 = Demo Mode
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
@@ -1188,7 +1198,7 @@ function spawnCar(){
   warp=new TimeWarp(scene,spot.x,spot.z,{
     getPixelRatio:()=>renderer.getPixelRatio(),
     setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
-    onRetroChange:(on,quiet)=>{driveCam.view=on?'overhead':'chase';if(!quiet)showToast(on?'1997 — the Met has never heard of you':'Welcome to 2026');},
+    onRetroChange:(on,quiet)=>{if(retroLook)retroLook.set(on);if(music)music.retro=on;driveCam.view=on?'overhead':'chase';if(!quiet)showToast(on?'1997 — the Met has never heard of you':'Welcome to 2026');},
   });
 }
 
@@ -1298,9 +1308,20 @@ function startMissions(){
   // shown on screen, read aloud, and sent to the phone (game/dispatch.js).
   const toLatLon=(x,z)=>({lat:LAT0-z/KZ,lon:LON0+x/KX});
   const dispatch=new Dispatch(toLatLon);
+  retroLook=new RetroLook({composer,bloom,scene,fog,sun,restoreLighting:updateLighting});
+  music=new Music();
+  guide=new Guide(scene);
   missions.onTarget=(stage,place)=>{
     const who=split.on&&phone.phones?split.car2:(mode==='drive'?car:{position:player.pos});
     dispatch.guide(stage,who.position,place,missions.item);
+    guide.reset();
+  };
+  // Guidance every frame: arrow + chevrons for whoever is guided, voice updates via Snowflake Dispatch.
+  updateGuide=dt=>{
+    const who=split.on&&phone.phones?split.car2.position:(mode==='drive'?car.position:player.pos);
+    const target=missions.currentTarget();
+    guide.update(dt,who,target,missions.state,kind=>dispatch.guide(kind,who,target,missions.item));
+    retroLook.update();
   };
   window.game={car,missions,player,setMode,warp,police,squad,wanted,roadblocks,phone,throwWeapon,dispatch};
 }
@@ -1315,6 +1336,7 @@ function updateMissions(dt){
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   warp.update();
+  if(!intro)updateGuide(dt);
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
   document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
 }
@@ -1392,7 +1414,7 @@ function p2Action(){
 // Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
 function startIntro(){
   let boot=null;
-  const done=()=>{if(boot)boot.cancel();intro=null;setMode('drive');if(DEMO)phone.toggleQr();}; // Demo Mode: QR code pops up for the judge
+  const done=()=>{if(boot)boot.cancel();intro=null;setMode('drive');music.start();showToast('📻 Strand FM 97.7 · M = music on/off');if(DEMO)phone.toggleQr();}; // Demo Mode: QR code pops up for the judge
   if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
   controls.enabled=false;
   // Open "in 1997" (boot screen), flash to 2026, then swoop down onto KCL.

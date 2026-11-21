@@ -48,6 +48,8 @@ export class Dispatch {
     const text =
       stage === 'pickup' ? `Head ${dir}, about ${m} metres, to ${place.name}. Pick up ${item}.`
       : stage === 'escape' ? `The Met is onto you! The red phone box is ${dir}, ${m} metres away. Press E inside it. Or throw your weapon to block them.`
+      : stage === 'update' ? `Keep going: ${place.name} is ${dir}, ${m} metres. Follow the arrow.`
+      : stage === 'near' ? `Nearly there! ${place.name} is just ${dir} of you.`
       : `Now deliver to ${place.name}: head ${dir}, about ${m} metres. No rush.`;
     this.show(text, viaSnowflake);
   }
