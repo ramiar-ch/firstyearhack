@@ -7,8 +7,18 @@
     <title>Strand Theft Auto</title>
   </head>
   <body>
-    <div id="app"></div>
-    <p id="hint">Arrow keys to drive</p>
+    <!-- Three.js draws into this canvas -->
+    <canvas id="game"></canvas>
+
+    <!-- HUD overlays (plain HTML on top of the canvas) -->
+    <div id="loading">Loading London...</div>
+    <div id="help">
+      P1: WASD · Shift run · Space handbrake · E car &nbsp;|&nbsp; P2: arrows · R-Shift run · R-Ctrl handbrake · Enter car
+    </div>
+    <div id="credit">
+      Map data © <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
