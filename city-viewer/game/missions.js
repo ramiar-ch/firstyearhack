@@ -43,7 +43,9 @@ export class MissionManager {
     this.pickup = null;
     this.dropoff = null;
     this.item = '';
-    this.onEvent = () => {}; // set by the game: 'pickup' / 'passed' / 'failed' (for phone haptics)
+    this.onEvent = () => {};
+    this.onTarget = () => {}; // set by the game: called with (stage, place) when the target changes (Snowflake Dispatch)
+    this.intro = false; // true during the scripted first mission (easy mode) // set by the game: 'pickup' / 'passed' / 'failed' (for phone haptics)
 
     this.pickupBeam = makeBeam(0xff8c1a); // orange
     this.dropoffBeam = makeBeam(0x3a8bff); // blue
@@ -97,6 +99,7 @@ export class MissionManager {
       this.pickup = this.places.find((p) => p.name === planned.pickup) ?? this.pickup;
       this.plannedDropoff = this.places.find((p) => p.name === planned.dropoff);
       this.plannedEscape = planned.escape ?? null; // optional "lose the police" stop in between
+      this.intro = true; // easy mode: big target zones, no time limit, police can't catch you
       if (planned.item) this.item = planned.item;
     }
     this.dropoff = null;
@@ -104,6 +107,7 @@ export class MissionManager {
     placeBeam(this.pickupBeam, this.pickup);
     this.dropoffBeam.visible = false;
     this.showBanner('NEW JOB', `Pick up ${this.item} at ${this.pickup.name}`, 'info');
+    this.onTarget('pickup', this.pickup);
   }
 
   collect(who = 0) {
@@ -116,6 +120,7 @@ export class MissionManager {
       this.pickupBeam.visible = false;
       this.onEvent('escape', who);
       this.showBanner('THE MET IS ONTO YOU!', `Hide in the ${this.escape.name} (press E there)`, 'failed');
+      this.onTarget('escape', this.escape);
       return;
     }
     this.startDropoff();
@@ -126,12 +131,13 @@ export class MissionManager {
     const dist = Math.hypot(this.dropoff.x - this.pickup.x, this.dropoff.z - this.pickup.z);
     // Time limit: London streets aren't straight, so allow ~9 m/s plus a bit
     // (planned demo jobs get extra time so nobody fails on stage).
-    this.timeLeft = Math.ceil((dist / 9 + (this.plannedDropoff ? 60 : 20)) / 5) * 5;
+    this.timeLeft = this.intro ? 999 : Math.ceil((dist / 9 + 20) / 5) * 5; // intro mission: no rush
     this.plannedDropoff = null;
     this.state = 'dropoff';
     this.pickupBeam.visible = false;
     placeBeam(this.dropoffBeam, this.dropoff);
-    this.showBanner('PARCEL COLLECTED', `Deliver to ${this.dropoff.name} · ${this.timeLeft} s`, 'info');
+    this.showBanner('PARCEL COLLECTED', `Deliver to ${this.dropoff.name}` + (this.intro ? '' : ` · ${this.timeLeft} s`), 'info');
+    this.onTarget('dropoff', this.dropoff);
   }
 
   /** who = 0 for P1, 1 for P2 (whoever reached the drop-off first). */
@@ -140,6 +146,7 @@ export class MissionManager {
     this.state = 'waiting';
     this.wait = NEXT_JOB_DELAY;
     this.onEvent(success ? 'passed' : 'failed', who);
+    this.intro = false;
     if (success) {
       this.money += REWARD;
       this.moneyBy[who] += REWARD;
@@ -172,7 +179,8 @@ export class MissionManager {
     const all = Array.isArray(pos) ? pos : [pos];
     if (all.length !== this.players) { this.players = all.length; this.refreshMoney(); }
     pos = all[0]; // the HUD arrow/distance are for P1
-    const arrived = (place) => all.findIndex((p) => dist2d(p, place) < ARRIVE_DISTANCE);
+    const reach = this.intro ? ARRIVE_DISTANCE * 1.7 : ARRIVE_DISTANCE; // bigger target zones in the intro
+    const arrived = (place) => all.findIndex((p) => dist2d(p, place) < reach);
     this.hud.style.display = active ? 'block' : 'none';
     // Beams gently pulse so they catch the eye.
     const pulse = 0.55 + Math.sin(performance.now() / 300) * 0.15;
@@ -223,7 +231,7 @@ export class MissionManager {
     this.hud.querySelector('.m-arrow').style.transform = `rotate(${bearing - cameraHeading}rad)`;
 
     const timer = this.hud.querySelector('.m-timer');
-    if (this.state === 'dropoff') {
+    if (this.state === 'dropoff' && !this.intro) {
       const t = Math.max(0, Math.ceil(this.timeLeft));
       timer.textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
       timer.classList.toggle('hurry', t <= 10);

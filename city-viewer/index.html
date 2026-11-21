@@ -150,6 +150,20 @@
   body.on-foot #held-item{display:block}
   @keyframes hold-bob{to{transform:rotate(-8deg) translateY(-10px)}}
   #report .r-log{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#444}
+  /* Wanted stars (game/wanted.js) - original style: orange stars, faint when empty */
+  #wanted{position:fixed;left:50%;top:40px;transform:translateX(-50%);z-index:6;display:none;gap:4px;pointer-events:none;
+    padding:3px 12px;border-radius:12px;background:rgba(5,7,13,.65)}
+  #wanted span{font-size:26px;line-height:1.1}
+  #wanted .on{color:#ff8c1a;opacity:var(--fade,1)}
+  #wanted .off{color:rgba(255,255,255,.22)}
+  #wanted.pop{animation:star-pop .5s ease-out}
+  @keyframes star-pop{from{transform:translateX(-50%) scale(1.4)}}
+  #police-alert{top:84px!important}
+  /* Snowflake Dispatch box (game/dispatch.js) */
+  #dispatch{position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:6;display:none;width:min(560px,90vw);pointer-events:none;
+    padding:10px 16px;border-radius:12px;background:rgba(234,243,255,.95);color:#05070d;border:2px solid #29b5e8}
+  #dispatch .d-head{font:900 13px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.12em;color:#1279a8;margin-bottom:4px}
+  #dispatch .d-text{font:700 17px/1.35 "Segoe UI",system-ui,sans-serif}
   #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
   #report .r-close{margin-top:10px;font-size:13px;color:#666}
 </style>
@@ -235,12 +249,17 @@ import { IntroSwoop } from './game/intro.js';
 import { playBoot } from './game/boot.js';
 import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
-import { PolicePatrol } from './game/police.js';
+import { buildPatrolRoads } from './game/police.js';
 import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
 import { PoliceReport } from './game/report.js';
-import { makeCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
+import { toCutout, funnyName, holdInHand, swayHeld } from './game/scanItem.js';
+import { holdModelOnCar, Roadblocks } from './game/scanModel.js';
+import { PoliceCar } from './game/policeCar.js';
+import { sfx } from './game/audio.js';
+import { Dispatch } from './game/dispatch.js';
+import { WantedLevel } from './game/wanted.js';
 
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
@@ -1961,6 +1980,8 @@ function setupUI(){
       if(e.code==='KeyP')phone.toggleQr();
       if(e.code==='KeyG')toggleSplit();
       if(e.code==='Enter')p2Action();
+      if(e.code==='KeyF'&&(mode==='strand'||mode==='walk'))throwWeapon(0);
+      if(e.code==='Slash'&&split.on){e.preventDefault();throwWeapon(1);}
     }
     if(mode==='drive'&&!e.repeat){if(e.code==='KeyV')cycleCar();if(e.code==='KeyC')DRIVE.camMode^=1;if(e.code==='KeyR'){showToast(i18n(spawnCar(DRIVE.x,DRIVE.z)?'carReset':'carUnavailable'));}}
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');});
@@ -2150,6 +2171,9 @@ let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
 let phone=null;      // phone controller over Wi-Fi (PhoneController)
 let split=null;      // 2-player split screen (SplitScreen)
 let report=null;     // end-of-match police report from Snowflake Cortex (PoliceReport)
+let roadblocks=null; // giant thrown scanned objects (Roadblocks)
+let squad=[];        // all the police cars (1 per wanted star, max 3)
+let wanted=null;     // wanted level 0-5 stars (WantedLevel)
 const DEMO=new URLSearchParams(location.search).get('demo')==='1'; // ?demo=1 = Demo Mode
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let boot=null;
@@ -2172,11 +2196,7 @@ function parkStrandCar(){
   driveCam=new DriveCamera(camera);
   // Red phone box (time machine) on the pavement just ahead of the car.
   const fwd=car.forward();const spot=freeSpot(car.position.x+fwd.x*12+fwd.z*7,car.position.z+fwd.z*12-fwd.x*7);
-  // The pedestrianised Strand and service streets are open to responding units.
-  const patrolRoads=buildGraph(r=>(r.kind==='car'||r.kind==='ped')&&
-    r.pts.some(([x,z])=>Math.hypot(x,z)<PLAY_RADIUS+200));
   warp=new TimeWarp(scene,spot.x,spot.z,{
-    patrol:new PolicePatrol(scene,patrolRoads.edges),
     getPixelRatio:()=>renderer.getPixelRatio(),
     setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
     onRetroChange:on=>{driveCam.view=split.cam2.view=on?'overhead':'chase';},
@@ -2204,7 +2224,7 @@ function updateStrandCar(dt){
   const ph=solo&&phone&&phone.getInput();
   if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
     if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
-  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);warp.raiseWanted('p1',car.position);} // crash = police alert
+  if(car.update(dt,input)){showToast(i18n('crash'));sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',0);addStar(0);} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
@@ -2254,7 +2274,16 @@ function startMissions(){
   missions=new MissionManager(scene,places);
   // Phone controller: its E button = the keyboard's E; game events make it vibrate.
   phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
-  split=new SplitScreen(scene,renderer,strandCarBlocked);
+  // Use the same obstacles and play-area limits for both drivers and the police.
+  roadblocks=new Roadblocks(scene);
+  const solid=(x,z)=>strandCarBlocked(x,z)||roadblocks.hits(x,z);
+  car.blockedAt=solid;
+  const patrolRoads=buildGraph(r=>(r.kind==='car'||r.kind==='ped')&&
+    r.pts.some(([x,z])=>Math.hypot(x,z)<PLAY_RADIUS+200));
+  const roads=buildPatrolRoads(patrolRoads.edges);
+  squad=Array.from({length:3},()=>new PoliceCar(scene,solid,roads,raycast));
+  wanted=new WantedLevel();
+  split=new SplitScreen(scene,renderer,solid);
   // A phone scanned the QR code and joined -> turn on 2 players automatically (the phone drives P2).
   phone.onPhonesChange=n=>{if(n>0&&!split.on&&!intro)toggleSplit();};
   const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
@@ -2262,23 +2291,21 @@ function startMissions(){
   // Everything that happens: buzz the phone + remember it for the Snowflake police report.
   report=new PoliceReport();
   missions.onEvent=(e,who)=>{
-    if(e==='escape'){
-      const second=who===1&&split.on;
-      warp.raiseWanted(second?'p2':'p1',second?split.car2.position:mode==='walk'?player.pos:car.position);
-      return;
-    }
+    if(e==='escape'){addStar(who);return;} // the heist starts a chase at pickup
     phone.haptic(HAPTICS[e]);report.log(e,who);
+    if(sfx[e])sfx[e](); // pickup / passed / failed sounds
   };
-  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
+  warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);if(e==='warp')sfx.warp();};
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
   // P2 in split screen, otherwise P1.
-  phone.onScan=async url=>{
+  phone.onScan=async (url,isCut)=>{
     try{
-      const cut=await makeCutout(url),name=funnyName();
-      if(split.on)holdInCar(split.car2,cut);else{holdInCar(car,cut);holdInHand(cut,name);}
-      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name}`,'passed');
-      phone.haptic(HAPTICS.pickup);
+      const cut=await toCutout(url,isCut),name=funnyName(); // the phone usually sends a finished cut-out
+      // 3D model on the car roof (round things become real 3D, flat things get thickness).
+      if(split.on)holdModelOnCar(split.car2,cut);else{holdModelOnCar(car,cut);holdInHand(cut,name);}
+      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name} · ${split.on?'/':'F'} or 💥 to throw`,'passed');
+      phone.haptic(HAPTICS.pickup);sfx.scan();
     }catch(e){showToast('Scan failed - try again');}
   };
   // INTRO MISSION "Exam Paper Heist" (always the first job): grab the KCL exam
@@ -2286,21 +2313,86 @@ function startMissions(){
   // -> finish the delivery at Somerset House.
   missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'the stolen KCL exam papers',
     escape:{name:'red phone box',x:warp.position.x,z:warp.position.z,done:()=>!warp.wanted}}];
+  phone.onThrow=()=>{if(!intro)throwWeapon(split.on?1:0);};
   // Handy for debugging: type `game` in the browser console (F12).
-  window.game={car,missions,player,setMode};
+  // ❄ Snowflake Dispatch: every new target -> Snowflake works out distance + direction,
+  // shown on screen, read aloud, and sent to the phone (game/dispatch.js).
+  const toLatLon=(x,z)=>({lat:LAT0-z/KZ,lon:LON0+x/KX});
+  const dispatch=new Dispatch(toLatLon);
+  missions.onTarget=(stage,place)=>{
+    const position=split.on&&phone.phones?split.car2.position:mode==='walk'?player.pos:car.position;
+    dispatch.guide(stage,position,place,missions.item);
+  };
+  window.game={car,missions,player,setMode,warp,police:squad[0],squad,wanted,roadblocks,phone,throwWeapon,dispatch};
 }
 function updateMissions(dt){
   if(!missions)return;
   const active=!intro&&(mode==='strand'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='walk'?player.pos:car.position;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);warp.raiseWanted('p2',split.car2.position);}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){sfx.crash();if(phone)phone.haptic(HAPTICS.crash);report.log('crash',1);addStar(1);}
+  updatePolice(dt);
+  sfx.engine(car.speed,mode==='strand'&&!intro,warp.retro); // engine hum
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
-  const target=warp.wanted==='p2'&&split.on?split.car2.position:pos;
-  if(!intro)warp.update(dt,missions.state!=='waiting',target);
+  if(!intro)warp.update(missions.state!=='waiting');
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
   document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
+}
+
+// ---- Police car + giant roadblocks (game/policeCar.js, game/scanModel.js) ----
+let policeNearTick=0;
+function updatePolice(dt){
+  if(roadblocks.update(dt)){sfx.thud();phone.haptic(HAPTICS.thud);} // a giant weapon just landed
+  const respondingTo=warp.wanted==='p2'&&split.on?split.car2:car;
+  const players=split.on?[car,split.car2]:[mode==='walk'?{position:player.pos}:car];
+  if(!warp.wanted)wanted.clear(); // escaped (phone box / roadblock / nicked) = no stars
+  // 1 police car per star (max 3). They get a bit faster with every star.
+  const want=intro||!warp.wanted?0:Math.max(1,wanted.policeCars);
+  squad.forEach((p,i)=>{
+    if(i<want&&!p.active)p.start(respondingTo,freeSpot,45+i*18,(i%2?1:-1)*i*6);
+    if(i>=want&&p.active&&!p.blocked)p.stop();
+    p.gentle=missions.intro; // first mission: the police chase but can't catch you
+    p.boost=1+wanted.level*0.05;
+  });
+  let nearest=Infinity;
+  for(const p of squad){
+    if(!p.active)continue;
+    // Chase whichever player is closest.
+    const target=players.reduce((a,b)=>a.position.distanceTo(p.car.position)<b.position.distanceTo(p.car.position)?a:b);
+    const d=target.position.distanceTo(p.car.position);
+    if(!p.blocked)nearest=Math.min(nearest,d);
+    if(p.update(dt,target)==='caught'){
+      sfx.nicked();phone.haptic(HAPTICS.nicked);report.log('nicked');
+      missions.money=Math.max(0,missions.money-5);missions.refreshMoney();
+      missions.showBanner('NICKED!','The Met got you · -£5','failed');
+      warp.clearWanted();wanted.clear();squad.forEach(q=>q.stop());
+      return;
+    }
+    // A police car drove into a giant roadblock -> the whole chase is over!
+    if(!p.blocked&&roadblocks.touching(p.car.position)){
+      p.blocked=true;sfx.crash();warp.clearWanted();wanted.clear();
+      missions.showBanner('POLICE BLOCKED!','The Met is stuck behind your giant weapon','passed');
+      setTimeout(()=>{if(p.blocked)p.stop();},6000); // unless a new chase restarted it
+    }
+  }
+  // Stay far away from every police car for a while -> lose a star.
+  if(wanted.update(dt,nearest)){showToast('★ Lost a star');if(!wanted.level)warp.clearWanted();}
+  // Phone buzzes like a heartbeat when the police are close.
+  if((policeNearTick-=dt)<0&&nearest<25){policeNearTick=1;phone.haptic(HAPTICS.policeNear);}
+}
+
+// Crashes and the heist pickup add a wanted star, including during retro missions.
+function addStar(who){
+  wanted.add(1);
+  warp.raiseWanted(who===1?'p2':'p1');
+}
+
+// F (P1) or / (P2) or the phone's 💥 button: throw your scanned weapon as a GIANT roadblock.
+function throwWeapon(who){
+  const c=who===1&&split.on?split.car2:car;
+  if(roadblocks.throwFrom(c)){sfx.throw();phone.haptic(HAPTICS.throw);showToast('💥 Weapon thrown!');}
+  else showToast('No weapon - scan something with the phone first 📷');
 }
 
 // G: turn 2-player split screen on/off (P1 is put in their car).

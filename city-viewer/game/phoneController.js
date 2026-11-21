@@ -15,6 +15,10 @@ export const HAPTICS = {
   failed: [300],
   police: [200, 100, 200, 100, 200],
   warp: [20, 30, 20, 30, 20, 30, 400],
+  throw: [30, 20, 60],
+  thud: [250],
+  nicked: [400, 100, 400],
+  policeNear: [50],
 };
 
 export class PhoneController {
@@ -22,6 +26,7 @@ export class PhoneController {
   constructor(onAction) {
     this.onAction = onAction;
     this.onPhonesChange = () => {}; // set by the game: called with the number of phones connected
+    this.onThrow = () => {}; // set by the game: phone THROW button pressed
     this.onScan = () => {}; // set by the game: called with a photo (data URL) of a scanned item
     this.input = null;
     this.lastInputTime = 0;
@@ -35,8 +40,9 @@ export class PhoneController {
         this.input = d;
         this.lastInputTime = performance.now();
         if (d.action && d.action !== this.lastAction) { this.lastAction = d.action; this.onAction(); }
+        if (d.throw && d.throw !== this.lastThrow) { this.lastThrow = d.throw; this.onThrow(); }
       });
-      events.addEventListener('scan', (e) => this.onScan(JSON.parse(e.data).image));
+      events.addEventListener('scan', (e) => { const d = JSON.parse(e.data); this.onScan(d.image, d.cut); });
       events.addEventListener('phones', (e) => {
         this.phones = JSON.parse(e.data).count;
         this.button.textContent = this.phones ? `📱 Phone connected (${this.phones})` : '📱 Phone controller (P)';

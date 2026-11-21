@@ -8,8 +8,7 @@ export class TimeWarp {
    * setPixelRatio(r): makes the renderer draw at a lower/higher resolution.
    * onRetroChange(isRetro): lets the game switch camera etc.
    */
-  constructor(scene, x, z, { setPixelRatio, getPixelRatio, onRetroChange, patrol }) {
-    this.patrol = patrol;
+  constructor(scene, x, z, { setPixelRatio, getPixelRatio, onRetroChange }) {
     this.setPixelRatio = setPixelRatio;
     this.getPixelRatio = getPixelRatio;
     this.onRetroChange = onRetroChange;
@@ -34,22 +33,24 @@ export class TimeWarp {
   }
 
   /** Track the driver who triggered this pursuit. */
-  raiseWanted(driver, position) {
+  raiseWanted(driver) {
     if (this.wanted) return;
-    this.patrol.dispatch(position);
     this.wanted = driver;
     this.alert.style.display = 'block';
     this.startSiren();
     this.onEvent('police');
   }
 
-  /** End the chase when the player escapes. */
+  /** End the chase with the phone box flash and sound. */
   escape() {
     if (!this.wanted) return;
     this.onEvent('warp');
     this.flashScreen();
+    this.clearWanted();
+  }
+
+  clearWanted() {
     this.wanted = null;
-    this.patrol.mesh.visible = false;
     this.alert.style.display = 'none';
     this.stopSiren();
   }
@@ -74,9 +75,8 @@ export class TimeWarp {
     this.onRetroChange(on);
   }
 
-  update(dt, missionActive, target) {
+  update(missionActive) {
     this.setRetro(missionActive || Boolean(this.wanted));
-    if (this.wanted) this.patrol.update(dt, target);
     // Phone box beam pulses, brighter while the police are after you.
     const beam = this.box.userData.beam;
     beam.material.opacity = (this.wanted ? 0.55 : 0.25) + Math.sin(performance.now() / 200) * 0.1;

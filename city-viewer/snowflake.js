@@ -59,4 +59,36 @@ async function writePoliceReport(stats) {
   return { text: String(json.data[0][0]).trim(), log };
 }
 
-module.exports = { writePoliceReport };
+/** Run one SQL statement through the REST API, return the first row. */
+async function runSql(sql) {
+  const { SNOWFLAKE_ACCOUNT, SNOWFLAKE_TOKEN, SNOWFLAKE_WAREHOUSE } = process.env;
+  if (!SNOWFLAKE_ACCOUNT || !SNOWFLAKE_TOKEN) return null;
+  const res = await fetch(`https://${SNOWFLAKE_ACCOUNT}.snowflakecomputing.com/api/v2/statements`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SNOWFLAKE_TOKEN}`,
+      'X-Snowflake-Authorization-Token-Type': 'PROGRAMMATIC_ACCESS_TOKEN',
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ statement: sql, timeout: 30, warehouse: SNOWFLAKE_WAREHOUSE }),
+    signal: AbortSignal.timeout(8000), // guidance must be quick
+  });
+  const json = await res.json();
+  if (!res.ok || !json.data) throw new Error(json.message || `HTTP ${res.status}`);
+  return json.data[0];
+}
+
+/**
+ * "Snowflake Dispatch": Snowflake's geospatial functions work out the real
+ * distance (metres) and compass bearing from the player to the target.
+ * from/to = { lat, lon }. Returns { metres, bearing } or null (no Snowflake).
+ */
+async function dispatchRoute(from, to) {
+  const n = (v) => Number(v).toFixed(6); // numbers only - safe to put in SQL
+  const a = `ST_MAKEPOINT(${n(from.lon)}, ${n(from.lat)})`, b = `ST_MAKEPOINT(${n(to.lon)}, ${n(to.lat)})`;
+  const row = await runSql(`SELECT ROUND(ST_DISTANCE(${a}, ${b})), ROUND(DEGREES(ST_AZIMUTH(${a}, ${b})))`);
+  return row ? { metres: Number(row[0]), bearing: Number(row[1]) } : null;
+}
+
+module.exports = { writePoliceReport, dispatchRoute };

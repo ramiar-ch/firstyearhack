@@ -8,7 +8,7 @@
 // GET /api/info tells the game this laptop's Wi-Fi address (for the QR code).
 
 const os = require('os');
-const { writePoliceReport } = require('./snowflake.js');
+const { writePoliceReport, dispatchRoute } = require('./snowflake.js');
 
 const clients = { game: new Set(), phone: new Set() };
 
@@ -71,10 +71,29 @@ function handle(req, res, port) {
   if (req.method === 'POST' && url.pathname === '/api/scan') {
     // Phone took a photo of an item: pass it on to the game (photos are big, allow ~3 MB).
     readJson(req, (data) => {
-      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image });
+      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image, cut: !!data.cut });
       res.writeHead(204);
       res.end();
     }, 3_000_000);
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/dispatch') {
+    // Mission guidance: Snowflake works out distance + direction, the phone shows it.
+    readJson(req, async (d) => {
+      let route = null;
+      try { if (d && d.from && d.to) route = await dispatchRoute(d.from, d.to); } catch (e) { console.log('Snowflake dispatch:', e.message); }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ route }));
+    });
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/phone-message') {
+    // Show a message big on the phone controller (e.g. the dispatch text).
+    readJson(req, (d) => {
+      if (d && typeof d.text === 'string') send('phone', 'message', { text: d.text.slice(0, 200) });
+      res.writeHead(204);
+      res.end();
+    });
     return true;
   }
   if (req.method === 'POST' && url.pathname === '/api/report') {
