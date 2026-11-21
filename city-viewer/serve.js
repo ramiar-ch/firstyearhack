@@ -2,6 +2,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const relay = require('./relay.js'); // game addition: phone controller messages (/api/...)
 
 const root = __dirname;
 const port = Number(process.env.PORT) || 8080;
@@ -15,6 +16,7 @@ const types = {
 };
 
 http.createServer((req, res) => {
+  if (relay.handle(req, res, port)) return; // game addition
   const urlPath = decodeURIComponent(req.url.split('?')[0]);
   let file = path.normalize(path.join(root, urlPath === '/' ? 'index.html' : urlPath));
   if (!file.startsWith(root)) { res.writeHead(403); return res.end(); }

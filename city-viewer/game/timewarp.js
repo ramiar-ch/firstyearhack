@@ -30,6 +30,7 @@ export class TimeWarp {
     this.flash = addDiv('warp-flash', '');
     this.crt = addDiv('crt', '');
     this.siren = null;
+    this.onEvent = () => {}; // set by the game: 'police' / 'warp' (for phone haptics)
   }
 
   /** Is (pos) close enough to the phone box to use it? */
@@ -43,10 +44,12 @@ export class TimeWarp {
     this.wanted = true;
     this.alert.style.display = 'block';
     this.startSiren();
+    this.onEvent('police');
   }
 
   /** Flash, then swap between today and 1997. */
   warp() {
+    this.onEvent('warp');
     this.flash.classList.remove('go');
     void this.flash.offsetWidth; // restart the CSS animation
     this.flash.classList.add('go');

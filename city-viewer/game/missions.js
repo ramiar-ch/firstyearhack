@@ -41,6 +41,7 @@ export class MissionManager {
     this.pickup = null;
     this.dropoff = null;
     this.item = '';
+    this.onEvent = () => {}; // set by the game: 'pickup' / 'passed' / 'failed' (for phone haptics)
 
     this.pickupBeam = makeBeam(0xff8c1a); // orange
     this.dropoffBeam = makeBeam(0x3a8bff); // blue
@@ -103,6 +104,7 @@ export class MissionManager {
     this.state = 'dropoff';
     this.pickupBeam.visible = false;
     placeBeam(this.dropoffBeam, this.dropoff);
+    this.onEvent('pickup');
     this.showBanner('PARCEL COLLECTED', `Deliver to ${this.dropoff.name} · ${this.timeLeft} s`, 'info');
   }
 
@@ -110,6 +112,7 @@ export class MissionManager {
     this.dropoffBeam.visible = false;
     this.state = 'waiting';
     this.wait = NEXT_JOB_DELAY;
+    this.onEvent(success ? 'passed' : 'failed');
     if (success) {
       this.money += REWARD;
       this.passed++;
