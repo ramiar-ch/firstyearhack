@@ -1,0 +1,1 @@
+[out:json][timeout:240];(way["building"](51.4930,-0.1160,51.5115,-0.0866);relation["building"](51.4930,-0.1160,51.5115,-0.0866);way["building:part"](51.4930,-0.1160,51.5115,-0.0866);relation["building:part"](51.4930,-0.1160,51.5115,-0.0866););out geom qt;

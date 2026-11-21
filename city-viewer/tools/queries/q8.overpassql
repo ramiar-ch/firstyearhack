@@ -1,0 +1,1 @@
+[out:json][timeout:240];(way["building"]["height"](51.4880,-0.1550,51.5350,-0.0700);way["building:part"]["height"](51.4880,-0.1550,51.5350,-0.0700););out geom qt;

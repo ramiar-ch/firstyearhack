@@ -1,0 +1,1 @@
+[out:json][timeout:240];(way["highway"](51.4920,-0.1470,51.5310,-0.0850);way["railway"~"^(rail|light_rail)$"](51.4920,-0.1470,51.5310,-0.0850););out geom qt;
