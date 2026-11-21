@@ -27,10 +27,11 @@ export class IntroSwoop {
    * endPose: { position, lookAt } where the swoop must finish.
    * onDone: called once when it finishes (or is skipped).
    */
-  constructor(camera, endPose, onDone) {
+  /** delay = extra seconds to wait at the top first (e.g. for the 1997 boot screen). */
+  constructor(camera, endPose, onDone, delay = 0) {
     this.camera = camera;
     this.onDone = onDone;
-    this.time = 0;
+    this.time = -delay;
     this.done = false;
 
     // End: distance/angles of the final camera around its look-at point.

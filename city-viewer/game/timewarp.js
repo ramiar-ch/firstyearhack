@@ -49,14 +49,15 @@ export class TimeWarp {
 
   /** Flash, then swap between today and 1997. */
   warp() {
-    this.onEvent('warp');
+    if (!this.retro) this.onEvent('warp'); // only count trips TO 1997 (not the boot screen's trip back)
     this.flash.classList.remove('go');
     void this.flash.offsetWidth; // restart the CSS animation
     this.flash.classList.add('go');
     setTimeout(() => this.setRetro(!this.retro), 250); // swap while the screen is white
   }
 
-  setRetro(on) {
+  /** quiet = true: no "1997" message (used by the boot screen). */
+  setRetro(on, quiet = false) {
     this.retro = on;
     document.body.classList.toggle('retro', on);
     if (on) {
@@ -70,7 +71,7 @@ export class TimeWarp {
     } else {
       this.setPixelRatio(this.normalRatio ?? 1);
     }
-    this.onRetroChange(on);
+    this.onRetroChange(on, quiet);
   }
 
   update() {

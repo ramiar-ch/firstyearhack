@@ -125,6 +125,12 @@
   #report .r-head{font:900 18px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.06em;color:#0b2a6b;border-bottom:3px solid #0b2a6b;padding-bottom:8px}
   #report .r-ref{font-size:13px;color:#555;margin:8px 0 12px}
   #report .r-text{font-size:16px;line-height:1.5;white-space:pre-wrap;margin:0 0 14px}
+  /* 1997 boot screen at the start (game/boot.js) */
+  #boot{position:fixed;inset:0;z-index:12;padding:6vh 7vw;background:rgba(0,0,8,.72);color:#9dff9d;pointer-events:none;
+    font:700 clamp(15px,2.2vw,26px)/1.45 "Courier New",monospace}
+  #boot pre{margin:0;font:inherit;white-space:pre-wrap}
+  #boot .boot-cursor{animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
   /* Scanned weapon held in your hand when walking (game/scanItem.js) */
   #held-item{position:fixed;right:6%;bottom:-2%;z-index:3;display:none;pointer-events:none;text-align:center;
     transform:rotate(-12deg);animation:hold-bob 1.1s ease-in-out infinite alternate}
@@ -204,6 +210,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { DrivableCar } from './game/car.js';
 import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
 import { IntroSwoop } from './game/intro.js';
+import { playBoot, BOOT_SECONDS } from './game/boot.js';
 import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
 import { MissionManager } from './game/missions.js';
 import { TimeWarp } from './game/timewarp.js';
@@ -1158,7 +1165,7 @@ function spawnCar(){
   warp=new TimeWarp(scene,spot.x,spot.z,{
     getPixelRatio:()=>renderer.getPixelRatio(),
     setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
-    onRetroChange:on=>{driveCam.view=on?'overhead':'chase';showToast(on?'1997 — the Met has never heard of you':'Back to today');},
+    onRetroChange:(on,quiet)=>{driveCam.view=on?'overhead':'chase';if(!quiet)showToast(on?'1997 — the Met has never heard of you':'Welcome to 2026');},
   });
 }
 
@@ -1280,10 +1287,13 @@ function p2Action(){
 // The 3-second swoop from high above London down to the car at KCL.
 // Add ?skipIntro=1 to the URL to jump straight in (handy while developing).
 function startIntro(){
-  const done=()=>{intro=null;setMode('drive');if(DEMO)phone.toggleQr();}; // Demo Mode: QR code pops up for the judge
+  let boot=null;
+  const done=()=>{if(boot)boot.cancel();intro=null;setMode('drive');if(DEMO)phone.toggleQr();}; // Demo Mode: QR code pops up for the judge
   if(new URLSearchParams(location.search).get('skipIntro')==='1'){done();return;}
   controls.enabled=false;
-  intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done);
+  // Open "in 1997" (boot screen), flash to 2026, then swoop down onto KCL.
+  boot=playBoot(warp);
+  intro=new IntroSwoop(camera,cameraPoseFor(car,'chase'),done,BOOT_SECONDS);
 }
 
 /* =========================================================
