@@ -139,6 +139,11 @@
   body.on-foot #held-item{display:block}
   @keyframes hold-bob{to{transform:rotate(-8deg) translateY(-10px)}}
   #report .r-log{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#444}
+  /* Snowflake Dispatch box (game/dispatch.js) */
+  #dispatch{position:fixed;left:50%;top:128px;transform:translateX(-50%);z-index:6;display:none;width:min(560px,90vw);pointer-events:none;
+    padding:10px 16px;border-radius:12px;background:rgba(234,243,255,.95);color:#05070d;border:2px solid #29b5e8}
+  #dispatch .d-head{font:900 13px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.12em;color:#1279a8;margin-bottom:4px}
+  #dispatch .d-text{font:700 17px/1.35 "Segoe UI",system-ui,sans-serif}
   #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
   #report .r-close{margin-top:10px;font-size:13px;color:#666}
 </style>
@@ -221,6 +226,7 @@ import { toCutout, funnyName, holdInHand, swayHeld } from './game/scanItem.js';
 import { holdModelOnCar, Roadblocks } from './game/scanModel.js';
 import { PoliceCar } from './game/policeCar.js';
 import { sfx } from './game/audio.js';
+import { Dispatch } from './game/dispatch.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1274,7 +1280,15 @@ function startMissions(){
   // Phone THROW button: the phone's player throws their weapon.
   phone.onThrow=()=>{if(!intro)throwWeapon(split.on?1:0);};
   // Handy for debugging: type `game` in the browser console (F12).
-  window.game={car,missions,player,setMode,warp,police,roadblocks,phone,throwWeapon};
+  // ❄ Snowflake Dispatch: every new target -> Snowflake works out distance + direction,
+  // shown on screen, read aloud, and sent to the phone (game/dispatch.js).
+  const toLatLon=(x,z)=>({lat:LAT0-z/KZ,lon:LON0+x/KX});
+  const dispatch=new Dispatch(toLatLon);
+  missions.onTarget=(stage,place)=>{
+    const who=split.on&&phone.phones?split.car2:(mode==='drive'?car:{position:player.pos});
+    dispatch.guide(stage,who.position,place,missions.item);
+  };
+  window.game={car,missions,player,setMode,warp,police,roadblocks,phone,throwWeapon,dispatch};
 }
 function updateMissions(dt){
   if(!missions)return;
@@ -1298,6 +1312,7 @@ function updatePolice(dt){
   const cars=split.on?[car,split.car2]:[car];
   // The alert is on -> a police car appears and chases. Off -> it goes away.
   if(warp.wanted&&!police.active&&!intro)police.start(cars[0],freeSpot);
+  police.gentle=missions.intro; // first mission: the police chase but can't catch you
   if(!warp.wanted&&police.active&&!police.blocked)police.stop();
   if(!police.active)return;
   // Chase whichever player is closest.

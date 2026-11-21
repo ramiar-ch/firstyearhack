@@ -43,6 +43,8 @@
   #preview-retake { background:var(--panel); color:var(--text); border:1px solid var(--line) !important; }
   #scan { position:fixed; top:8px; right:12px; z-index:3; padding:8px 14px; border-radius:12px; border:none;
           background:#ffd23f; color:var(--bg); font-weight:900; font-size:15px; }
+  #msg { position:fixed; left:50%; top:46px; transform:translateX(-50%); z-index:3; display:none; width:min(92vw,620px); padding:10px 14px;
+         border-radius:12px; background:#eaf3ff; color:#05070d; font-weight:800; font-size:17px; line-height:1.3; text-align:center; pointer-events:none; }
   #status { position:fixed; top:6px; left:50%; transform:translateX(-50%); font-size:12px; color:#8e9ab5; pointer-events:none; }
   #start { position:fixed; inset:0; background:var(--bg); display:grid; place-items:center; text-align:center; padding:24px; z-index:5; }
   #start h1 { margin:0 0 8px; font-style:italic; font-weight:900; letter-spacing:.06em; }
@@ -62,6 +64,7 @@
   </div>
 </div>
 <div id="status">connecting…</div>
+<div id="msg"></div>
 <!-- Scan an item: opens the phone camera (a normal photo, works without HTTPS) -->
 <button id="scan" type="button">📷 SCAN ITEM</button>
 <div id="scan-prompt">
@@ -160,6 +163,16 @@ const events = new EventSource('/api/events?role=phone');
 events.onopen = () => { status.textContent = 'connected ✓'; };
 events.onerror = () => { status.textContent = 'reconnecting…'; };
 events.addEventListener('haptic', (e) => { const d = JSON.parse(e.data); buzz(d.pattern); });
+// Snowflake Dispatch instructions shown big on the phone (where to go next).
+const msg = document.getElementById('msg');
+let msgTimer;
+events.addEventListener('message', (e) => {
+  msg.textContent = JSON.parse(e.data).text;
+  msg.style.display = 'block';
+  buzz([40, 40, 40]);
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { msg.style.display = 'none'; }, 9000);
+});
 
 // ---- Scan an item: take a photo, shrink it, send it to the game ----
 const photo = document.getElementById('photo');

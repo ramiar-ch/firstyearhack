@@ -19,6 +19,7 @@ export class PoliceCar {
     this.stuckTime = 0;
     this.reverseTime = 0;
     this.blocked = false; // crashed into a roadblock
+    this.gentle = false; // intro mission: chase close behind but never catch
   }
 
   /** Appear ~45 m behind the target car and start chasing. */
@@ -58,7 +59,7 @@ export class PoliceCar {
     const c = this.car;
     const dx = target.position.x - c.position.x, dz = target.position.z - c.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < CATCH_DISTANCE) return 'caught';
+    if (dist < CATCH_DISTANCE && !this.gentle) return 'caught';
 
     // Steer towards the target: compare where we point with where it is.
     const want = Math.atan2(-dx, -dz);
@@ -67,12 +68,15 @@ export class PoliceCar {
     let input = { throttle: Math.abs(diff) > 1.2 ? 0.6 : 0.85, brake: 0, steer: THREE.MathUtils.clamp(diff * 2.5, -1, 1), handbrake: false };
 
     // Stuck against a wall? Reverse for a second with the wheel turned the other way.
-    if (Math.abs(c.speed) < 1) this.stuckTime += dt; else this.stuckTime = 0;
+    const holding = this.gentle && dist < 12; // waiting behind you on purpose (intro mission)
+    if (Math.abs(c.speed) < 1 && !holding) this.stuckTime += dt; else this.stuckTime = 0;
     if (this.stuckTime > 1.2) { this.reverseTime = 1; this.stuckTime = 0; }
     if (this.reverseTime > 0) {
       this.reverseTime -= dt;
       input = { throttle: 0, brake: 1, steer: -input.steer, handbrake: false };
     }
+    // Gentle mode: hang back ~12 m behind you (scary, but can't catch you).
+    if (holding) input = { throttle: 0, brake: c.speed > 0.5 ? 0.6 : 0, steer: input.steer, handbrake: false };
     c.update(dt, input);
     return null;
   }
