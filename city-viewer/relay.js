@@ -70,7 +70,7 @@ function handle(req, res, port) {
   if (req.method === 'POST' && url.pathname === '/api/scan') {
     // Phone took a photo of an item: pass it on to the game (photos are big, allow ~3 MB).
     readJson(req, (data) => {
-      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image });
+      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image, cut: !!data.cut });
       res.writeHead(204);
       res.end();
     }, 3_000_000);

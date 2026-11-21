@@ -217,7 +217,7 @@ import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
 import { PoliceReport } from './game/report.js';
-import { makeCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
+import { toCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1246,9 +1246,9 @@ function startMissions(){
   // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
   // (on the car roof; in your hand when walking). The phone's owner gets it:
   // P2 in split screen, otherwise P1.
-  phone.onScan=async url=>{
+  phone.onScan=async (url,isCut)=>{
     try{
-      const cut=await makeCutout(url),name=funnyName();
+      const cut=await toCutout(url,isCut),name=funnyName(); // the phone usually sends a finished cut-out
       if(split.on)holdInCar(split.car2,cut);else{holdInCar(car,cut);holdInHand(cut,name);}
       missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name}`,'passed');
       phone.haptic(HAPTICS.pickup);

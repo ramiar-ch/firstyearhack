@@ -36,7 +36,7 @@ export class PhoneController {
         this.lastInputTime = performance.now();
         if (d.action && d.action !== this.lastAction) { this.lastAction = d.action; this.onAction(); }
       });
-      events.addEventListener('scan', (e) => this.onScan(JSON.parse(e.data).image));
+      events.addEventListener('scan', (e) => { const d = JSON.parse(e.data); this.onScan(d.image, d.cut); });
       events.addEventListener('phones', (e) => {
         this.phones = JSON.parse(e.data).count;
         this.button.textContent = this.phones ? `📱 Phone connected (${this.phones})` : '📱 Phone controller (P)';
