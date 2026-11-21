@@ -125,6 +125,13 @@
   #report .r-head{font:900 18px/1.2 "Segoe UI",system-ui,sans-serif;letter-spacing:.06em;color:#0b2a6b;border-bottom:3px solid #0b2a6b;padding-bottom:8px}
   #report .r-ref{font-size:13px;color:#555;margin:8px 0 12px}
   #report .r-text{font-size:16px;line-height:1.5;white-space:pre-wrap;margin:0 0 14px}
+  /* Scanned weapon held in your hand when walking (game/scanItem.js) */
+  #held-item{position:fixed;right:6%;bottom:-2%;z-index:3;display:none;pointer-events:none;text-align:center;
+    transform:rotate(-12deg);animation:hold-bob 1.1s ease-in-out infinite alternate}
+  #held-item img{display:block;max-height:34vh;max-width:28vw;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+  #held-item span{display:inline-block;margin-bottom:28px;padding:3px 10px;border-radius:8px;background:rgba(0,0,0,.6);font-weight:700;font-size:14px}
+  body.on-foot #held-item{display:block}
+  @keyframes hold-bob{to{transform:rotate(-8deg) translateY(-10px)}}
   #report .r-log{margin:0 0 14px;padding-left:18px;font-size:13px;line-height:1.45;color:#444}
   #report .r-foot{font:700 14px/1.3 "Segoe UI",system-ui,sans-serif;color:#1f5fbf}
   #report .r-close{margin-top:10px;font-size:13px;color:#666}
@@ -203,6 +210,7 @@ import { TimeWarp } from './game/timewarp.js';
 import { PhoneController, HAPTICS } from './game/phoneController.js';
 import { SplitScreen } from './game/splitScreen.js';
 import { PoliceReport } from './game/report.js';
+import { makeCutout, funnyName, holdInCar, holdInHand, swayHeld } from './game/scanItem.js';
 
 /* =========================================================
    界面语言（默认英文，可切换中文，选择会记在本机浏览器里）
@@ -1225,6 +1233,17 @@ function startMissions(){
   report=new PoliceReport();
   missions.onEvent=(e,who)=>{phone.haptic(HAPTICS[e]);report.log(e,who);};
   warp.onEvent=e=>{phone.haptic(HAPTICS[e]);report.log(e);};
+  // Scan-a-weapon: the phone sends a photo -> paper cut-out the player HOLDS
+  // (on the car roof; in your hand when walking). The phone's owner gets it:
+  // P2 in split screen, otherwise P1.
+  phone.onScan=async url=>{
+    try{
+      const cut=await makeCutout(url),name=funnyName();
+      if(split.on)holdInCar(split.car2,cut);else{holdInCar(car,cut);holdInHand(cut,name);}
+      missions.showBanner('WEAPON EQUIPPED',`${split.on?'P2: ':''}${name}`,'passed');
+      phone.haptic(HAPTICS.pickup);
+    }catch(e){showToast('Scan failed - try again');}
+  };
   // Demo Mode (?demo=1): the first job is always this short, safe one.
   if(DEMO)missions.script=[{pickup:'Bush House',dropoff:'Somerset House',item:'a box of KCL exam papers'}];
   // Handy for debugging: type `game` in the browser console (F12).
@@ -1239,6 +1258,8 @@ function updateMissions(dt){
   const d=new THREE.Vector3();camera.getWorldDirection(d);
   missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
   warp.update();
+  swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
+  document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
 }
 
 // G: turn 2-player split screen on/off (P1 is put in their car).

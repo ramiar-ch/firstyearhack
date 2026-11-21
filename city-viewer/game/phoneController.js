@@ -22,6 +22,7 @@ export class PhoneController {
   constructor(onAction) {
     this.onAction = onAction;
     this.onPhonesChange = () => {}; // set by the game: called with the number of phones connected
+    this.onScan = () => {}; // set by the game: called with a photo (data URL) of a scanned item
     this.input = null;
     this.lastInputTime = 0;
     this.lastAction = 0;
@@ -35,6 +36,7 @@ export class PhoneController {
         this.lastInputTime = performance.now();
         if (d.action && d.action !== this.lastAction) { this.lastAction = d.action; this.onAction(); }
       });
+      events.addEventListener('scan', (e) => this.onScan(JSON.parse(e.data).image));
       events.addEventListener('phones', (e) => {
         this.phones = JSON.parse(e.data).count;
         this.button.textContent = this.phones ? `📱 Phone connected (${this.phones})` : '📱 Phone controller (P)';

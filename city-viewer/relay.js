@@ -23,9 +23,9 @@ setInterval(() => {
   for (const set of Object.values(clients)) for (const res of set) res.write(': ping\n\n');
 }, 15000);
 
-function readJson(req, done) {
+function readJson(req, done, maxLength = 10000) {
   let body = '';
-  req.on('data', (c) => { body += c; if (body.length > 10000) req.destroy(); });
+  req.on('data', (c) => { body += c; if (body.length > maxLength) req.destroy(); });
   req.on('end', () => { try { done(JSON.parse(body || '{}')); } catch { done(null); } });
 }
 
@@ -65,6 +65,15 @@ function handle(req, res, port) {
       res.writeHead(204);
       res.end();
     });
+    return true;
+  }
+  if (req.method === 'POST' && url.pathname === '/api/scan') {
+    // Phone took a photo of an item: pass it on to the game (photos are big, allow ~3 MB).
+    readJson(req, (data) => {
+      if (data && typeof data.image === 'string' && data.image.startsWith('data:image/')) send('game', 'scan', { image: data.image });
+      res.writeHead(204);
+      res.end();
+    }, 3_000_000);
     return true;
   }
   if (req.method === 'POST' && url.pathname === '/api/report') {
