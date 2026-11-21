@@ -18,7 +18,11 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 | 4 | Drive | W/S throttle/brake (hold S to reverse) · A/D steer · Space handbrake · V change vehicle · C chase/cab camera · R back on the road |
 | 5 | Strand car | WASD/arrows drive · Space handbrake · V chase/overhead · E exit or re-enter on foot |
 
-The opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Driving uses one view.
+The opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
+
+Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. Crashes in the Strand cars trigger a police alert. Press E near the red phone box (Enter for P2) to switch to 1997, or use R in Strand car or Walk mode.
+
+Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. The phone controls P2 in two-car mode.
 
 T runs/pauses time, H hides the UI, and clicking the minimap moves you there.
 

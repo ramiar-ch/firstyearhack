@@ -68,6 +68,66 @@
   .intro-caption{position:fixed;left:50%;bottom:12%;transform:translateX(-50%);opacity:0;pointer-events:none;z-index:6;
     font:800 clamp(20px,3.2vw,40px)/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.3em;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.6);white-space:nowrap}
   .hidden-ui #speedo{display:none!important}
+  /* Mission panel (under the top bar) */
+  #mission{position:absolute;left:14px;top:84px;display:none;width:340px;pointer-events:none;z-index:4}
+  #mission .m-money{display:inline-block;margin-bottom:6px;padding:4px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--panel-b);
+    font:800 24px/1.1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#7dff9a}
+  #mission .m-money.pop{animation:money-pop .6s ease-out}
+  @keyframes money-pop{from{transform:scale(1.35)}}
+  #mission .m-task{display:none;align-items:center;gap:12px;padding:10px 14px;border-radius:12px;background:var(--panel);border:1px solid var(--panel-b);
+    backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  #mission .m-arrow{flex:none;display:inline-block;font-size:26px;line-height:1;color:#ff8c1a}
+  #mission .dropoff .m-arrow{color:#3a8bff}
+  #mission .m-task>div{flex:1;min-width:0}
+  #mission .m-title{font-weight:800;font-size:15px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mission .m-sub{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #mission .m-timer{flex:none;font:800 22px/1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+  #mission .m-timer.hurry{color:#ff5a3a}
+  /* Big "MISSION PASSED" message */
+  #mission-banner{position:fixed;left:50%;top:26%;transform:translateX(-50%);opacity:0;pointer-events:none;z-index:6;text-align:center}
+  #mission-banner .b-big{font:900 italic clamp(30px,5vw,60px)/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.04em;color:#fff;
+    -webkit-text-stroke:2px #111;paint-order:stroke fill}
+  #mission-banner.passed .b-big{color:#ffb020}
+  #mission-banner.failed .b-big{color:#ff4a3a}
+  #mission-banner.info .b-big{font-size:clamp(22px,3vw,34px)}
+  #mission-banner .b-small{margin-top:8px;font:700 clamp(15px,1.8vw,20px)/1.3 "Segoe UI",system-ui,sans-serif;color:#fff;
+    -webkit-text-stroke:1px #111;paint-order:stroke fill}
+  #mission-banner.passed .b-small{color:#7dff9a;font-size:clamp(22px,3vw,34px)}
+  .hidden-ui #mission{display:none!important}
+  /* Police alert + time warp + 1997 MODE (game/timewarp.js) */
+  #police-alert{position:fixed;left:50%;top:64px;transform:translateX(-50%);display:none;pointer-events:none;z-index:5;padding:8px 18px;border-radius:10px;
+    font:900 22px/1.2 "Segoe UI",system-ui,sans-serif;text-align:center;color:#fff;animation:police 0.5s steps(1) infinite}
+  #police-alert small{display:block;font-size:13px;font-weight:700}
+  @keyframes police{0%{background:#1a4dff}50%{background:#e0101e}}
+  #warp-flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:20}
+  #warp-flash.go{animation:warp-flash .7s ease-out}
+  @keyframes warp-flash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+  #crt{position:fixed;inset:0;display:none;pointer-events:none;z-index:15;
+    background:repeating-linear-gradient(rgba(0,0,0,.22) 0 1px,transparent 1px 3px),radial-gradient(ellipse at center,transparent 60%,rgba(0,0,0,.55))}
+  body.retro #crt{display:block}
+  body.retro #app canvas{image-rendering:pixelated}
+  body.retro #mission,body.retro #speedo,body.retro #mission-banner,body.retro #toast{font-family:"Courier New",monospace!important;color:#ffe14a}
+  body.retro #mission .m-title,body.retro #mission .m-money{font-family:"Courier New",monospace}
+  /* Phone controller button + QR code (game/phoneController.js) */
+  #phone-btn{position:fixed;left:14px;bottom:112px;z-index:4;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--panel-b);font-weight:700}
+  #qr-overlay{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(5,7,13,.75)}
+  #qr-overlay .qr-card{background:#fff;color:#111;border-radius:16px;padding:20px 24px;text-align:center;max-width:90vw}
+  #qr-overlay h2{margin:0 0 8px;font:900 24px/1.2 "Segoe UI",system-ui,sans-serif}
+  #qr-overlay .qr-img img{display:block;margin:0 auto;max-width:70vmin;height:auto}
+  #qr-overlay .qr-url{font:600 15px monospace;margin:10px 0 4px}
+  #qr-overlay .qr-tip{font-size:14px;color:#444;margin:0;max-width:360px}
+  .hidden-ui #phone-btn{display:none!important}
+  /* 2-player split screen (game/splitScreen.js) */
+  #twop-btn{position:fixed;left:14px;bottom:156px;z-index:4;padding:8px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--panel-b);font-weight:700}
+  #speedo2{position:absolute;left:75%;bottom:70px;transform:translateX(-50%);display:none;pointer-events:none;
+    font:800 30px/1 "Segoe UI",system-ui,sans-serif;font-variant-numeric:tabular-nums;color:#9cc2ff;text-shadow:0 2px 4px rgba(0,0,0,.7)}
+  #speedo2 small{font-size:14px;font-weight:600;margin-left:4px}
+  body.split #speedo2{display:block}
+  body.split #speedo{left:25%}
+  body.split #street{left:25%}
+  body.split #side{display:none} /* the Places panel would cover P2's view */
+  body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:3px;margin-left:-1px;background:#05070d;z-index:3;pointer-events:none}
+  .hidden-ui #twop-btn,.hidden-ui #speedo2{display:none!important}
 </style>
 </head>
 <body>
@@ -140,6 +200,11 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { DrivableCar } from './game/car.js';
 import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
 import { IntroSwoop } from './game/intro.js';
+import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
+import { MissionManager } from './game/missions.js';
+import { TimeWarp } from './game/timewarp.js';
+import { PhoneController, HAPTICS } from './game/phoneController.js';
+import { SplitScreen } from './game/splitScreen.js';
 
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
@@ -1110,7 +1175,10 @@ function onPlayersChanged(){
   Hud.setJoinOverlay(mode==='walk'&&Players.players.length<4,i18n('joinHint'));
   const q=document.getElementById('quality');if(q)applyQuality(q.value);
 }
-function setMode(m){if(m===mode)return;const prev=mode;mode=m;controls.enabled=m==='orbit';orbitAnim=null;if(document.pointerLockElement)document.exitPointerLock();
+function setMode(m){
+  if(m===mode)return;
+  if(split?.on&&m!=='strand')toggleSplit();
+  const prev=mode;mode=m;controls.enabled=m==='orbit';orbitAnim=null;if(document.pointerLockElement)document.exitPointerLock();
   const dir=new THREE.Vector3();camera.getWorldDirection(dir);
   document.getElementById('speedo').style.display=m==='strand'?'block':'none';
   if(m==='strand')driveCam.snap(car);
@@ -1282,6 +1350,12 @@ function setupUI(){
     if(e.code==='KeyV'&&!e.repeat&&mode==='strand')showToast(i18n(driveCam.toggleView()==='chase'?'viewChase':'viewOverhead'));
     if(e.code==='Digit1')setMode('orbit');if(e.code==='Digit2')setMode('walk');if(e.code==='Digit3')setMode('fly');
     if(e.code==='Digit4')setMode('drive');
+    if(!e.repeat){
+      if(e.code==='KeyR'&&(mode==='strand'||mode==='walk'))warp.warp();
+      if(e.code==='KeyP')phone.toggleQr();
+      if(e.code==='KeyG')toggleSplit();
+      if(e.code==='Enter')p2Action();
+    }
     if(mode==='drive'&&!e.repeat){if(e.code==='KeyV')cycleCar();if(e.code==='KeyC')DRIVE.camMode^=1;if(e.code==='KeyR'){spawnCar(DRIVE.x,DRIVE.z);showToast(i18n('carReset'));}}
     if(e.code==='KeyT'){timePlaying=!timePlaying;setPP();showToast(i18n(timePlaying?'timeOn':'timeOff'));}if(e.code==='KeyH')document.body.classList.toggle('hidden-ui');});
   addEventListener('blur',()=>{kbSource.reset();for(const p of Players.players){if(p.source&&p.source.reset)p.source.reset();}});
@@ -1297,7 +1371,9 @@ function applyQuality(q){const n=mode==='walk'?Math.max(1,Players.players.length
   const prCap=n>=3?1:n===2?1.25:1.5;
   const prManual={low:0.75,mid:1,high:Math.min(devicePixelRatio,prCap)}[q];
   const smManual={low:1024,mid:2048,high:n>=3?1024:n===2?2048:4096}[q];
-  renderer.setPixelRatio(prManual);composer.setPixelRatio(prManual);onResize();
+  if(warp?.retro)warp.normalRatio=prManual;
+  const ratio=warp?.retro?320/innerWidth:prManual;
+  renderer.setPixelRatio(ratio);composer.setPixelRatio(ratio);onResize();
   if(sun.shadow.mapSize.x!==smManual){sun.shadow.mapSize.set(smManual,smManual);if(sun.shadow.map){sun.shadow.map.dispose();sun.shadow.map=null;}}
   shadowBoxSide=n>=3?70:n===2?90:110;
   const far=n>=2&&fogOn?5000:14000;
@@ -1393,6 +1469,7 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
   const ph=uTime.value%30;sigPhase=ph<14?0:ph<17?1:2;if(SIG_MATS){SIG_MATS[0].emissiveIntensity=sigPhase===2?3:0;SIG_MATS[1].emissiveIntensity=sigPhase===1?3:0;SIG_MATS[2].emissiveIntensity=sigPhase===0?3:0;BEACON_MAT.emissiveIntensity=(uTime.value%1.2)<0.6?2.5:0.1;}
   if(intro)intro.update(elapsed);else if(mode==='strand')updateStrandCar(dt);else if(mode==='orbit')updateOrbit(dt);else if(mode==='walk')updateWalk(dt);else if(mode==='drive')updateDrive(dt);else updateFly(dt);
   checkNearCar();
+  updateMissions(dt);
   if(lifeRoot.visible)updateLife(dt);
   for(const fn of MOD_HOOKS)fn(dt);
   fitNear();
@@ -1402,7 +1479,10 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
   if(EYE){EYE.wheel.rotation.z+=dt*0.0035;for(const c of EYE.caps)c.rotation.z=-EYE.wheel.rotation.z;}
   waterNormal.offset.x+=dt*0.0008;waterNormal.offset.y+=dt*0.0005;
 
-  if(mode==='walk'&&Players.players.length){
+  if(split.on){
+    placeShadow();
+    split.render(camera,updateWeatherView);
+  }else if(mode==='walk'&&Players.players.length){
     if(!Views.layout.length)refreshViews();
     const multi=Views.layout.length>1;
     if(!multi&&(LOOK==='london'||(bloomOn&&night>0.08))){
@@ -1431,6 +1511,7 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
     for(const L of labels){const d=anchor.distanceTo(L.o.position);L.o.visible=!hideWalkFp&&d<(L.kcl?3000:1600)&&d>40;}
   }
   drawMinimap();
+  missions.drawOnMinimap(mmCtx,v=>(v/RH+1)*mmCtx.canvas.width/2,PLAY_RADIUS);
   if(mode==='walk'&&Views.layout.length>1)Hud.drawEdgeArrows(Views.layout);
   else{const ea=document.getElementById('edge-arrows');if(ea)ea.innerHTML='';}
   if(mode==='walk'){const p=Players.players[0];const showXhair=p&&p.view&&p.view.firstPerson&&Players.players.length===1;document.getElementById('crosshair').style.display=showXhair?'block':'none';}
@@ -1452,6 +1533,9 @@ function buildRain(){const N=2600,P=new Float32Array(N*6),E=new Float32Array(N*2
    启动
    ========================================================= */
 let car=null;        // the drivable car (DrivableCar)
+let warp=null;       // red phone box time machine + 1997 mode (TimeWarp)
+let phone=null;      // phone controller over Wi-Fi (PhoneController)
+let split=null;      // 2-player split screen (SplitScreen)
 let driveCam=null;   // camera that follows the car (DriveCamera)
 let intro=null;      // the opening swoop while it plays (IntroSwoop), then null
 let nearCarShown=false;
@@ -1459,40 +1543,58 @@ const ENTER_DISTANCE=5; // metres from the car's centre to get in
 
 // Park the car on the Strand right in front of the KCL Strand Building.
 // (0,0) is KCL; the Strand runs past ~70 m north of it.
+const strandCarBlocked=(x,z)=>Math.hypot(x,z)>PLAY_RADIUS||blockedAt(x,z)||collideCircle(x,z,0.18).hit;
 function parkStrandCar(){
   const f=roadFrameFast(-34,-72,40)||{px:-34,pz:-72,tx:1,tz:0};
   let tx=f.tx,tz=f.tz;if(tx<0){tx=-tx;tz=-tz;}          // point east along the Strand
   const heading=Math.atan2(-tx,-tz);                     // car "forward" is -z in its model
-  car=new DrivableCar(f.px,f.pz,heading,(x,z)=>blockedAt(x,z)||collideCircle(x,z,0.18).hit);
+  car=new DrivableCar(f.px,f.pz,heading,strandCarBlocked);
   // If that exact spot touches a wall, slide along the road until it's clear.
   for(let s=0;s<60&&car.hits(car.position.x,car.position.z,heading);s++){
     const d=(s%2?1:-1)*Math.ceil(s/2)*2;car.position.set(f.px+tx*d,0,f.pz+tz*d);}
   scene.add(car.mesh);
   driveCam=new DriveCamera(camera);
+  // Red phone box (time machine) on the pavement just ahead of the car.
+  const fwd=car.forward();const spot=freeSpot(car.position.x+fwd.x*12+fwd.z*7,car.position.z+fwd.z*12-fwd.x*7);
+  warp=new TimeWarp(scene,spot.x,spot.z,{
+    getPixelRatio:()=>renderer.getPixelRatio(),
+    setPixelRatio:r=>{renderer.setPixelRatio(r);composer.setPixelRatio(r);onResize();},
+    onRetroChange:on=>{driveCam.view=on?'overhead':'chase';showToast(on?'1997 — the Met has never heard of you':'Back to today');},
+  });
 }
 
 // One frame of driving: keyboard -> car -> camera -> speedometer.
 function relocateStrandCar(x,z){
   const road=roadFrameFast(x,z,120);
   const pos=freeSpot(road?.px??x,road?.pz??z);
+  if(car.hits(pos.x,pos.z,car.heading))return;
   car.position.copy(pos);
   car.velocity.set(0,0,0);
   driveCam.snap(car);
 }
 function updateStrandCar(dt){
+  const solo=!split.on;
   const input={
-    throttle:key('KeyW')||key('ArrowUp')?1:0,
-    brake:key('KeyS')||key('ArrowDown')?1:0,
-    steer:(key('KeyA')||key('ArrowLeft')?1:0)-(key('KeyD')||key('ArrowRight')?1:0),
+    throttle:key('KeyW')||(solo&&key('ArrowUp'))?1:0,
+    brake:key('KeyS')||(solo&&key('ArrowDown'))?1:0,
+    steer:(key('KeyA')||(solo&&key('ArrowLeft'))?1:0)-(key('KeyD')||(solo&&key('ArrowRight'))?1:0),
     handbrake:key('Space'),
   };
-  if(car.update(dt,input))showToast(i18n('crash'));
+  // Phone controller (if one is connected): its buttons add to the keyboard.
+  const ph=solo&&phone&&phone.getInput();
+  if(ph){input.throttle=Math.max(input.throttle,ph.throttle);input.brake=Math.max(input.brake,ph.brake);
+    if(!input.steer)input.steer=ph.steer;input.handbrake=input.handbrake||ph.handbrake;}
+  if(car.update(dt,input)){showToast(i18n('crash'));if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();} // crash = police alert
   driveCam.update(dt,car);
   document.getElementById('speedo').innerHTML=`${Math.round(Math.abs(car.speed)*2.237)}<small>mph</small>`;
 }
 
 // E: get in (when walking next to the car) or get out (when driving).
 function toggleCar(){
+  if((mode==='strand'||mode==='walk')&&warp.near(mode==='strand'?car.position:player.pos,mode==='strand'?8:3.5)){
+    warp.warp();
+    return;
+  }
   if(mode==='strand'){
     // Step out of the driver's door (right-hand side in the UK) onto free ground.
     const fwd=car.forward();const p=freeSpot(car.position.x-fwd.z*2.4,car.position.z+fwd.x*2.4);
@@ -1507,6 +1609,63 @@ function checkNearCar(){
   if(mode!=='walk'||!car)return;
   const near=player.pos.distanceTo(car.position)<ENTER_DISTANCE;
   if(near&&!nearCarShown)showToast(i18n('carNear'));nearCarShown=near;
+}
+
+// ---- Missions (game/missions.js) ----
+// Real landmarks inside the play area. Each one is moved onto the nearest
+// road, so you can always drive right up to it.
+let missions=null;
+const MISSION_PLACES=[
+  ['KCL Strand',51.5121,-0.1165],['Somerset House',51.5108,-0.1173],['Bush House',51.5129,-0.1174],
+  ['Royal Courts of Justice',51.5136,-0.1134],['Temple station',51.5111,-0.1140],['The Savoy',51.5104,-0.1203],
+  ['Covent Garden',51.5118,-0.1229],["Lincoln's Inn Fields",51.5159,-0.1172],['Waterloo Bridge',51.5085,-0.1168],
+  ['National Theatre',51.5070,-0.1140],['Southbank Centre',51.5058,-0.1167],['Aldwych',51.5126,-0.1192],
+  ['Fleet Street',51.5140,-0.1095],['Kingsway',51.5160,-0.1205],
+];
+function startMissions(){
+  scene.add(createPlayAreaRing());
+  const places=[];
+  for(const [name,la,lo] of MISSION_PLACES){
+    const [x,z]=proj(la,lo);
+    const f=roadFrameFast(x,z,80);                       // nearest road point
+    const p=freeSpot(f?f.px:x,f?f.pz:z);                // nudge off any wall
+    if(Math.hypot(p.x,p.z)<PLAY_RADIUS-20)places.push({name,x:p.x,z:p.z});
+  }
+  missions=new MissionManager(scene,places);
+  // Phone controller: its E button = the keyboard's E; game events make it vibrate.
+  phone=new PhoneController(()=>{if(intro)return;if(split.on)p2Action();else toggleCar();});
+  split=new SplitScreen(scene,renderer,strandCarBlocked);
+  const twoP=document.createElement('button');twoP.id='twop-btn';twoP.textContent='👥 2 Players (G)';
+  twoP.onclick=()=>{toggleSplit();twoP.blur();};document.body.appendChild(twoP);
+  missions.onEvent=e=>phone.haptic(HAPTICS[e]);
+  warp.onEvent=e=>phone.haptic(HAPTICS[e]);
+  // Handy for debugging: type `game` in the browser console (F12).
+  window.game={car,missions,player,setMode};
+}
+function updateMissions(dt){
+  if(!missions)return;
+  const active=!intro&&(mode==='strand'||mode==='walk');     // paused in Orbit/Fly and during the intro
+  const pos=mode==='strand'?car.position:player.pos;
+  // P2 (split screen): drive their car, and they can do missions too.
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(),car)){if(phone)phone.haptic(HAPTICS.crash);warp.raiseWanted();}
+  const d=new THREE.Vector3();camera.getWorldDirection(d);
+  missions.update(dt,split.on?[pos,split.car2.position]:pos,Math.atan2(d.x,-d.z),active);
+  warp.update();
+}
+
+// G: turn 2-player split screen on/off (P1 is put in their car).
+function toggleSplit(){
+  if(intro||!car)return;
+  if(mode!=='strand')setMode('strand');
+  const on=split.toggle(car);
+  labelRenderer.domElement.style.display=on?'none':'';
+  if(!on)onResize(); // give P1's camera the full screen shape back
+  showToast(on?'2 players! P1: WASD · P2: arrows or phone':'1 player');
+}
+
+// P2's "E" (Enter key or the phone's E button): use the phone box if close.
+function p2Action(){
+  if(split&&split.on&&warp.near(split.car2.position,8))warp.warp();
 }
 
 // The 3-second swoop from high above London down to the car at KCL.
@@ -1534,7 +1693,7 @@ async function init(){
   const qt=parseFloat(QS.get('time'));if(qt>=0&&qt<24){hours=qt;document.getElementById('time').value=qt;}
   buildLife();
   Players.init({clamp,lerp,moveWalk,pedGeo,crowdMaterial:PED_MAT,scene});
-  buildDriveCars();parkStrandCar();buildRain();buildLabels();buildMinimap();setupUI();onResize();setLook(LOOK);
+  buildDriveCars();parkStrandCar();startMissions();buildRain();buildLabels();buildMinimap();setupUI();onResize();setLook(LOOK);
   const at=(QS.get('at')||'').split(',').map(Number);if(at.length===2&&at.every(Number.isFinite)){const [x,z]=proj(at[0],at[1]);controls.target.set(x,2,z);camera.position.set(x+70,55,z+90);}controls.update();
   if(CARS[QS.get('car')])DRIVE.kind=QS.get('car');const qm=QS.get('mode');if(['walk','fly','drive','strand'].includes(qm))setMode(qm);
   if(!qm&&!QS.has('at')&&!QS.has('car'))startIntro();

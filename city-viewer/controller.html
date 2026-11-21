@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Strand Controller</title>
+<style>
+  /* Phone controller: hold the phone sideways (landscape).
+     Left = steering pad (drag left/right). Right = GAS / BRAKE / HANDBRAKE / E. */
+  :root { --bg:#05070d; --panel:#111827; --line:#2a3550; --orange:#ff8c1a; --blue:#3a8bff; --text:#eef2fa; }
+  * { box-sizing:border-box; -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; overflow:hidden; touch-action:none; }
+  #pad { position:fixed; inset:0; display:grid; grid-template-columns:1.2fr 1fr; gap:12px; padding:12px; }
+  .zone { background:var(--panel); border:1px solid var(--line); border-radius:18px; position:relative; }
+  #steer { display:flex; align-items:center; justify-content:center; }
+  #steer .track { position:absolute; left:10%; right:10%; top:50%; height:6px; margin-top:-3px; background:var(--line); border-radius:3px; }
+  #knob { position:absolute; top:50%; left:50%; width:84px; height:84px; margin:-42px 0 0 -42px; border-radius:50%;
+          background:var(--orange); display:grid; place-items:center; padding:8px; font-weight:900; color:var(--bg); font-size:15px; }
+  #steer .hint { position:absolute; bottom:12px; width:100%; text-align:center; color:#8e9ab5; font-size:13px; }
+  #buttons { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:2fr 1fr; gap:12px; background:none; border:none; }
+  .btn { border-radius:18px; border:1px solid var(--line); background:var(--panel); display:grid; place-items:center; padding:10px 12px; text-align:center;
+         font-weight:900; font-size:22px; letter-spacing:.06em; color:var(--text); }
+  .btn.down { filter:brightness(1.7); transform:scale(.97); }
+  #gas { background:#1f6b3a; grid-row:1; grid-column:2; }
+  #brake { background:#7a1f22; grid-row:1; grid-column:1; }
+  #hand { font-size:16px; }
+  #act { background:var(--blue); color:var(--bg); font-size:16px; }
+  #status { position:fixed; top:6px; left:50%; transform:translateX(-50%); font-size:12px; color:#8e9ab5; pointer-events:none; }
+  #start { position:fixed; inset:0; background:var(--bg); display:grid; place-items:center; text-align:center; padding:24px; z-index:5; }
+  #start h1 { margin:0 0 8px; font-style:italic; font-weight:900; letter-spacing:.06em; }
+  #start h1 span { color:var(--orange); }
+  #start p { color:#8e9ab5; margin:6px 0; }
+  #start button { margin-top:14px; padding:14px 30px; font-size:20px; font-weight:900; border:none; border-radius:12px; background:var(--orange); color:var(--bg); }
+  @media (orientation: portrait) { #pad { grid-template-columns:1fr; grid-template-rows:1fr 1.1fr; } }
+</style>
+</head>
+<body>
+<div id="start">
+  <div>
+    <h1><span>STRAND</span> CONTROLLER</h1>
+    <p>Turn your phone sideways.</p>
+    <p id="hapticNote"></p>
+    <button id="go" type="button">TAP TO DRIVE</button>
+  </div>
+</div>
+<div id="status">connecting…</div>
+<div id="pad">
+  <div class="zone" id="steer"><div class="track"></div><div id="knob">STEER</div><div class="hint">drag left / right</div></div>
+  <div class="zone" id="buttons">
+    <div class="btn" id="brake">BRAKE</div>
+    <div class="btn" id="gas">GAS</div>
+    <div class="btn" id="hand">HANDBRAKE</div>
+    <div class="btn" id="act">E · CAR / BOX</div>
+  </div>
+</div>
+<script>
+// ---- Haptics: navigator.vibrate works on Android (Chrome). iPhones don't support it. ----
+const canVibrate = 'vibrate' in navigator;
+const buzz = (pattern) => { if (canVibrate) navigator.vibrate(pattern); };
+document.getElementById('hapticNote').textContent = canVibrate ? 'Haptic feedback: on' : 'Haptic feedback is not supported on this phone (works on Android).';
+
+// ---- Current controls ----
+const state = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+let lastSent = '';
+function sendInput(extra) {
+  const msg = JSON.stringify(extra ? { ...state, ...extra } : state);
+  if (!extra && msg === lastSent) return; // nothing changed
+  lastSent = msg;
+  fetch('/api/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: msg }).catch(() => {});
+}
+setInterval(() => { lastSent = ''; sendInput(); }, 250); // heartbeat so the game knows we're still here
+
+// ---- Buttons (pointer events = works with several fingers at once) ----
+function holdButton(id, onChange) {
+  const el = document.getElementById(id);
+  const set = (down) => { el.classList.toggle('down', down); onChange(down); sendInput(); };
+  el.addEventListener('pointerdown', (e) => { el.setPointerCapture(e.pointerId); buzz(12); set(true); });
+  el.addEventListener('pointerup', () => set(false));
+  el.addEventListener('pointercancel', () => set(false));
+}
+holdButton('gas', (d) => { state.throttle = d ? 1 : 0; });
+holdButton('brake', (d) => { state.brake = d ? 1 : 0; });
+holdButton('hand', (d) => { state.handbrake = d; });
+const act = document.getElementById('act');
+act.addEventListener('pointerdown', () => { act.classList.add('down'); buzz(20); sendInput({ action: Date.now() }); });
+act.addEventListener('pointerup', () => act.classList.remove('down'));
+
+// ---- Steering pad: finger position left/right = steer -1..1 ----
+const pad = document.getElementById('steer'), knob = document.getElementById('knob');
+let steerId = null;
+function steerFrom(e) {
+  const r = pad.getBoundingClientRect();
+  const x = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2.4));
+  state.steer = -x; // game: +1 = left
+  knob.style.left = `${50 + x * 40}%`;
+  sendInput();
+}
+pad.addEventListener('pointerdown', (e) => { steerId = e.pointerId; pad.setPointerCapture(e.pointerId); steerFrom(e); });
+pad.addEventListener('pointermove', (e) => { if (e.pointerId === steerId) steerFrom(e); });
+const release = () => { steerId = null; state.steer = 0; knob.style.left = '50%'; sendInput(); };
+pad.addEventListener('pointerup', release);
+pad.addEventListener('pointercancel', release);
+
+// ---- Messages from the game: vibrate on crashes, missions, police, warp ----
+const status = document.getElementById('status');
+const events = new EventSource('/api/events?role=phone');
+events.onopen = () => { status.textContent = 'connected ✓'; };
+events.onerror = () => { status.textContent = 'reconnecting…'; };
+events.addEventListener('haptic', (e) => { const d = JSON.parse(e.data); buzz(d.pattern); });
+
+// ---- Start: a tap is needed before phones allow vibration/fullscreen ----
+document.getElementById('go').addEventListener('click', async () => {
+  buzz([30, 40, 30]);
+  document.getElementById('start').remove();
+  try { await document.documentElement.requestFullscreen(); await screen.orientation.lock('landscape'); } catch { /* not supported - fine */ }
+});
+</script>
+</body>
+</html>
