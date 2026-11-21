@@ -1,5 +1,5 @@
 // game/retroLook.js - makes 1997 mode look like a real late-90s game, not just "pixelated":
-//   - limited colour palette with dithering (the checkerboard dot shading old PCs used)
+//   - a hand-picked 24-colour 1997 palette (very light dithering)
 //   - thick purple fog = short draw distance (buildings "pop in" like on old consoles)
 //   - chunky, sharp textures (no smooth blending)
 //   - no modern glow or soft shadows
@@ -8,13 +8,24 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 
-// Screen filter: squash colours to a few levels per channel, with a 4x4 Bayer
-// dither pattern so gradients turn into the classic dotted look.
+// Screen filter: snap every pixel to the NEAREST colour of a hand-picked
+// 24-colour "1997" palette (London navy, brick red, sodium orange, park green,
+// Portland stone...). A very light 4x4 dither softens big gradients.
+const PALETTE = [
+  0x0b0f1a, 0x1b2436, 0x2c3d5c, 0x3f5f8c, 0x6f97c8, 0xa9c6e8, // night/sky blues
+  0x2a2a2e, 0x4d4d55, 0x7a7a82, 0xa8a8ae, 0xd6d4cc, 0xf4f0e2, // greys + stone + white
+  0x5a2a1e, 0x8e4634, 0xc0623e, 0xe08a4c, 0xffb24a, 0xffe08a, // bricks, oranges, warm light
+  0x1f3a22, 0x3f6b35, 0x7aa04a, 0x3a1f3f, 0xc8102e, 0x29b5e8, // greens, purple, red, cyan accent
+];
 const PaletteShader = {
-  uniforms: { tDiffuse: { value: null }, levels: { value: 5 } },
+  uniforms: {
+    tDiffuse: { value: null },
+    // Raw 0..1 values (no colour-space conversion: this filter runs on the final screen colours).
+    palette: { value: PALETTE.map((c) => new THREE.Vector3(((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255)) },
+  },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
-    uniform sampler2D tDiffuse; uniform float levels; varying vec2 vUv;
+    uniform sampler2D tDiffuse; uniform vec3 palette[24]; varying vec2 vUv;
     float bayer(vec2 p){
       int x = int(mod(p.x, 4.0)), y = int(mod(p.y, 4.0)); int i = x + y * 4;
       float m[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
@@ -22,10 +33,15 @@ const PaletteShader = {
     }
     void main(){
       vec3 c = texture2D(tDiffuse, vUv).rgb;
-      c = pow(c, vec3(0.9)) * 1.08;                       // a bit punchier, like old CRT colours
-      c += bayer(gl_FragCoord.xy) / levels;               // dither
-      c = floor(c * levels + 0.5) / levels;               // only a few shades per colour
-      gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+      c = clamp((c - 0.5) * 1.15 + 0.52, 0.0, 1.0);          // a little more contrast, like an old CRT
+      c += bayer(gl_FragCoord.xy) * 0.07;                    // very light dither
+      vec3 best = palette[0]; float bestD = 10.0;
+      for (int i = 0; i < 24; i++) {                          // nearest palette colour
+        vec3 d = (c - palette[i]) * vec3(0.9, 1.2, 0.7);      // eyes are most sensitive to green
+        float dd = dot(d, d);
+        if (dd < bestD) { bestD = dd; best = palette[i]; }
+      }
+      gl_FragColor = vec4(best, 1.0);
     }`,
 };
 

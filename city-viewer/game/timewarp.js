@@ -68,9 +68,9 @@ export class TimeWarp {
     this.retro = on;
     document.body.classList.toggle('retro', on);
     if (on) {
-      // Draw at ~320 pixels wide, then the browser blows it up with sharp pixels.
+      // Draw at ~480 pixels wide, then the browser blows it up with sharp pixels.
       this.normalRatio = this.getPixelRatio();
-      this.setPixelRatio(320 / innerWidth);
+      this.setPixelRatio(480 / innerWidth); // ~480 px wide: chunky but readable
       // The 1997 police have never heard of you.
       this.wanted = false;
       this.alert.style.display = 'none';
