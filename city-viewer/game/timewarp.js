@@ -6,6 +6,7 @@
 // Use the phone box (or R) again to come back to 2026.
 
 import * as THREE from 'three';
+import { telephoneKiosk } from '../js/phoneKiosk.js';
 
 export class TimeWarp {
   /**
@@ -129,26 +130,15 @@ function addDiv(id, html) {
   return d;
 }
 
-/** A classic red London phone box (original simple model) + a glowing beam above it. */
+/** A red London telephone kiosk with the mission beacon above it. */
 function buildPhoneBox() {
-  const g = new THREE.Group();
-  const red = new THREE.MeshStandardMaterial({ color: 0xc8102e, roughness: 0.5 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0xfff2c8, emissive: 0xffd88a, emissiveIntensity: 1.5 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.5, 1.1), red);
-  body.position.y = 1.25;
-  const windows = new THREE.Mesh(new THREE.BoxGeometry(1.12, 1.3, 1.12), glass); // lit windows
-  windows.position.y = 1.3;
-  const roof = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.3, 1.25), red);
-  roof.position.y = 2.65;
-  const sign = new THREE.Mesh(new THREE.BoxGeometry(1.14, 0.18, 1.14),
-    new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 1.2 }));
-  sign.position.y = 2.35;
+  const g = telephoneKiosk();
   const beam = new THREE.Mesh(
     new THREE.CylinderGeometry(1.6, 1.6, 60, 24, 1, true).translate(0, 30, 0),
     new THREE.MeshBasicMaterial({ color: 0xff2a3a, transparent: true, opacity: 0.3, depthWrite: false,
       side: THREE.DoubleSide, blending: THREE.AdditiveBlending }),
   );
-  g.add(body, windows, roof, sign, beam);
+  g.add(beam);
   g.userData.beam = beam;
   return g;
 }

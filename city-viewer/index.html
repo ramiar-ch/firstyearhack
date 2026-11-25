@@ -303,6 +303,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { DrivableCar } from './game/car.js';
 import { DriveCamera, cameraPoseFor } from './game/driveCamera.js';
 import { DriveLook } from './game/driveLook.js';
+import { telephoneKiosk } from './js/phoneKiosk.js';
 import { IntroSwoop } from './game/intro.js';
 import { playBoot } from './game/boot.js';
 import { PLAY_RADIUS, createPlayAreaRing } from './game/playArea.js';
@@ -520,7 +521,6 @@ function texWaterNormal(){const S=256;const c=document.createElement('canvas');c
   g.fillStyle='#46ddd6';g.strokeStyle='#162e38';g.lineWidth=1.7;
   for(const {x,z} of bikeStations){g.beginPath();g.arc((x/RH+1)*S/2,(z/RH+1)*S/2,4.1,0,Math.PI*2);g.fill();g.stroke();}const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
 function texRoundel(){return canvasTex(128,(g,S)=>{g.clearRect(0,0,S,S);g.fillStyle='#fff';g.fillRect(0,0,S,S);g.strokeStyle='#dc241f';g.lineWidth=18;g.beginPath();g.arc(64,64,42,0,7);g.stroke();g.fillStyle='#0019a8';g.fillRect(6,52,116,24);});}
-function texPhone(){return canvasTex(128,(g,S)=>{g.fillStyle='#c8102e';g.fillRect(0,0,S,S);g.fillStyle='#1a1d22';for(let r=0;r<6;r++)for(let c=0;c<3;c++)g.fillRect(14+c*35,26+r*15,30,12);g.fillStyle='#f4f2ea';g.fillRect(10,6,108,12);g.fillStyle='#111';g.font='bold 10px Arial';g.fillText('TELEPHONE',30,16);});}
 
 /* =========================================================
    渲染器 / 场景
@@ -778,7 +778,8 @@ void win(inout vec3 col,inout float gl,inout vec3 em,float lx,float ly,float W,f
 const FACADE_MAIN=`
 float flH=vF.x*0.01,bay=max(vF.y*0.01,0.5),span=vF.z*0.1,seed=vF.w/65535.0;
 float topH=vG.x*0.1,gH=vG.y*0.1,edgeT=mod(vG.z,4.0),gType=floor(mod(vG.z,16.0)/4.0+0.01),vari=vG.w;
-bool gothic=vG.z>=16.0;
+bool gothic=mod(floor(vG.z/16.0),2.0)>0.5;
+int facade=int(floor(vG.z/32.0));
 float u=vU.x,v=vU.y;
 float aa=max(length(vec2(dFdx(u),dFdy(u))),length(vec2(dFdx(v),dFdy(v))))*0.8+0.0015;float far=smoothstep(0.05,0.3,aa);
 vec3 wallC=texture2D(wallMap,vec2(u,v)/uTile).rgb*vT;
@@ -790,6 +791,7 @@ if(st==4){
   float fy=mod(v,flH),fx=mod(u,bay);float mull=1.0-smoothstep(0.035,0.035+aa,min(fx,bay-fx));float spand=1.0-smoothstep(0.8,0.8+aa,fy);
   vec3 gc=uGlass*vT*(0.8+0.35*h21(vec2(floor(u/bay),floor(v/flH))+seed));col=mix(uFrame,mix(gc,vT*vec3(0.32,0.35,0.4),spand),1.0-mull);
   gl=(1.0-mull)*(1.0-spand);em=vec3(0.85,0.9,1.0)*step(h21(vec2(floor(u/(bay*4.0)),floor(v/flH))+seed*7.0),0.45)*gl*uNight*0.32;
+  if(facade==3){float fin=1.0-smoothstep(0.08,0.08+aa,abs(mod(u+bay,bay*2.0)-bay));col=mix(col,uTrim*0.72,fin*0.9);gl*=1.0-fin;em*=1.0-fin;}
   if(v<gH&&shop)em+=vec3(1.0,0.85,0.6)*gl*(0.15+uNight*0.5);
 }else if(st==5){
   float fy=mod(v,flH)/flH,fx=mod(u,1.5);float band=smoothstep(0.32,0.32+aa/flH,fy)*(1.0-smoothstep(0.86,0.86+aa/flH,fy))*(inSpan?1.0:0.0)*step(gH,v)*step(v,topH-para);
@@ -804,6 +806,21 @@ if(st==4){
     float ww=gothic?0.43:st==0?0.5:st==1?0.44:st==2?0.42:st==3?0.45:0.55;float wy=gothic||st==6?0.18:0.25;float wh=gothic?0.73:st==6?0.64:0.6;
     float W=bay*ww,Hh=flH*wh;if(fi<0.5&&(st==0||st==2||st==3)){Hh*=1.16;}if(rel+flH>topH-para-gH+0.05&&st!=0&&st!=6)Hh*=0.8;
     float bars=gothic?1.0:(st==2||st==3)?(mod(vari,2.0)<1.0?2.0:1.0):(st==0?0.0:1.0);float arch=gothic?2.0:(st==6||(st==1&&vari>150.0))?1.0:0.0;
+    if(facade==1){
+      // Deco stonework: continuous pilasters, recessed spandrels and narrower windows.
+      float rib=1.0-smoothstep(0.095,0.095+aa,abs(abs(fx)-bay*0.42));
+      col=mix(col,trimC,rib*0.84);
+      col=mix(col,trimC*0.76,box2(fx,ly0,-bay*0.27,0.11,bay*0.27,flH*0.90,aa)*0.62);
+      W=bay*0.43;Hh=flH*0.60;wy=0.22;bars=1.0;arch=0.0;
+    }else if(facade==2){
+      // Workshops and warehouses: tall, wide multi-pane openings, with brick piers.
+      W=bay*0.69;Hh=flH*0.69;wy=0.12;bars=2.0;arch=1.0;
+      float pier=1.0-smoothstep(0.13,0.13+aa,bay*0.5-abs(fx));
+      col=mix(col,wallC*0.78,pier*0.66);
+    }else if(facade==4){
+      W*=0.91;Hh*=1.08;bars=2.0;
+      if(fi<0.5)col=mix(col,trimC,box2(fx,ly0,-W*0.65,flH*wy-0.14,W*0.65,flH*wy-0.045,aa)*0.84);
+    }
     if((st==0||st==1)&&mod(rel,flH)<0.16)col=mix(col,trimC,0.8);
     win(col,gl,em,fx,ly0-flH*wy,W,Hh,aa,vec2(bi,fi),seed,bars,arch,uFrame,trimC,0.36,1.0);
     if((st==3||st==2)&&fi<0.5&&mod(vari,3.0)<1.0){float bal=box2(fx,ly0,-W*0.5-0.3,flH*wy-0.05,W*0.5+0.3,flH*wy+0.9,aa);float bx=mod(u,0.12);float bb=(1.0-smoothstep(0.012,0.012+aa,min(bx,0.12-bx)))+(1.0-smoothstep(0.025,0.025+aa,abs(ly0-flH*wy-0.88)));col=mix(col,vec3(0.03),bal*min(bb,1.0)*(1.0-far));}
@@ -886,6 +903,13 @@ function chooseStyle(b,H,cx,cz,h){
   if(cz<-500)return P([[2,0.38],[1,0.25],[0,0.2],[3,0.1],[5,0.07]]);
   return P([[0,0.46],[1,0.2],[2,0.14],[3,0.1],[5,0.1]]);}
 function riverDistApprox(x,z){for(let d=0;d<600;d+=30){if(isWaterRaw(x,z-d)||isWaterRaw(x,z+d)||isWaterRaw(x+d,z)||isWaterRaw(x-d,z))return d;}return 1e9;}
+function facadeVariant(b,type,style,height,seed){
+  if(style===4&&height>16&&seed>0.48)return 3;
+  if(style===6||['warehouse','industrial'].includes(type))return 2;
+  if((style===0||style===3)&&height>=14&&height<=42&&((b.y>=1920&&b.y<=1945)||(['office','commercial','hotel'].includes(type)&&seed<0.21)))return 1;
+  if((style===1||style===2)&&['terrace','house','residential','apartments'].includes(type)&&seed<0.43)return 4;
+  return 0;
+}
 function tintFor(st,h,b){const tc=b.c?parseColor(b.c):null;if(tc&&st!==4)return tc.map(v=>lerp(v,0.85,0.25));const k=0.9+h*0.18;
   const T={0:[[0.9,0.87,0.8],[0.84,0.81,0.74],[0.78,0.75,0.68]],1:[[0.74,0.4,0.31],[0.66,0.34,0.27],[0.78,0.46,0.36]],2:[[0.8,0.72,0.58],[0.72,0.66,0.55],[0.84,0.78,0.64]],3:[[0.97,0.96,0.92],[0.95,0.92,0.84],[0.93,0.9,0.86]],4:[[0.78,0.88,0.95],[0.66,0.76,0.82],[0.8,0.85,0.82]],5:[[0.78,0.77,0.73],[0.66,0.66,0.66],[0.82,0.78,0.7]],6:[[0.5,0.36,0.29],[0.58,0.44,0.34],[0.44,0.32,0.27]]}[st];
   const c=T[Math.floor(h*2.999)];return [c[0]*k,c[1]*k,c[2]*k];}
@@ -896,6 +920,32 @@ function insetRing(r,d,outwardSign){const n=r.length,out=[];for(let i=0;i<n;i++)
   for(let i=0;i<n;i++){const a=r[i],b=r[(i+1)%n],c=out[i],e=out[(i+1)%n];if((b[0]-a[0])*(e[0]-c[0])+(b[1]-a[1])*(e[1]-c[1])<=0)return null;}
   const A0=Math.abs(signedArea(r)),A1=Math.abs(signedArea(out));if(A1<A0*0.25)return null;return out;}
 const STACKS=[],POTS=[],PLANT=[];
+function pitchedRoof(buf,ring,wallTop,rise,hipped,roofCol,wallCol){
+  const length=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
+  const short=length(ring[0],ring[1])>length(ring[1],ring[2])?1:0;
+  const walls=Array.from({length:4},(_,i)=>ring[(short+i)%4]);
+  const [a,b,c,d]=walls;
+  const mid=(q,r)=>q.map((x,i)=>(x+r[i])/2);
+  const m=mid(a,b),n=mid(c,d),centre=mid(m,n);
+  const hip=hipped?Math.min(0.34,length(a,b)/(2*length(m,n))):0;
+  const ridge=(q,r)=>[lerp(q[0],r[0],hip),wallTop+rise,lerp(q[1],r[1],hip)];
+  const p=ridge(m,n),q=ridge(n,m);
+  const at=[a,b,c,d].map(([x,z])=>[x,wallTop,z]);
+  const face=(vertices,color)=>{
+    const [a,b,c]=vertices.map(v=>new THREE.Vector3(...v));
+    const normal=b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+    const mid=a.clone().add(b).add(c).multiplyScalar(1/3);
+    if(Math.abs(normal.y)>0.05?normal.y<0:normal.x*(mid.x-centre[0])+normal.z*(mid.z-centre[1])<0){
+      vertices=[vertices[0],...vertices.slice(1).reverse()];normal.negate();
+    }
+    const ids=vertices.map(v=>buf.v(...v,normal.x,normal.y,normal.z,color));
+    for(let i=1;i<ids.length-1;i++)buf.i.p3(ids[0],ids[i],ids[i+1]);
+  };
+  face([at[1],at[2],q,p],roofCol);
+  face([at[3],at[0],p,q],roofCol);
+  face([at[0],at[1],p],hipped?roofCol:wallCol);
+  face([at[2],at[3],q],hipped?roofCol:wallCol);
+}
 function roofTris(buf,ring,holes,y,col){const contour=ring.map(p=>new THREE.Vector2(p[0],p[1]));const hs=holes.map(h=>h.map(p=>new THREE.Vector2(p[0],p[1])));let tris;try{tris=THREE.ShapeUtils.triangulateShape(contour,hs);}catch(e){return;}
   const all=ring.concat(...holes);const base=buf.n;for(const p of all)buf.v(p[0],y,p[1],0,1,0,col);
   for(const t of tris){const a=all[t[0]],b=all[t[1]],c=all[t[2]];const cr=(b[1]-a[1])*(c[0]-a[0])-(b[0]-a[0])*(c[1]-a[1]);if(cr>=0)buf.i.p3(base+t[0],base+t[1],base+t[2]);else buf.i.p3(base+t[0],base+t[2],base+t[1]);}}
@@ -929,8 +979,11 @@ function buildBuildings(){
     let roofKind='flat',roofH=0;const rad=Math.sqrt(area/Math.PI);
     if(rs==='dome'||rs==='onion'||rs==='round'){roofKind='dome';roofH=b.RH||Math.min(rad,H*0.5);}
     else if(rs==='pyramidal'||rs==='cone'||(rs==='hipped'&&ring.length!==4)){roofKind='pyr';roofH=b.RH||Math.min(rad*0.9,12,H*0.4);}
-    else if((rs==='gabled'||rs==='hipped')&&ring.length===4){roofKind='gable';roofH=b.RH||Math.min(rad*0.6,8,H*0.35);}
-    else if(!landmarkStyle&&!onWater&&!b.pt&&!b.sky&&type!=='roof'&&st<=3&&H<34&&H>8&&ring.length<=16&&!b.holes.length&&area>60&&h3<(st===0?0.5:st===3?0.45:0.35))roofKind='mansard';
+    else if((rs==='gabled'||rs==='hipped')&&ring.length===4){roofKind=rs==='hipped'?'hipped':'gable';roofH=b.RH||Math.min(rad*0.6,8,H*0.35);}
+    else if(!rs&&!landmarkStyle&&!b.pt&&ring.length===4&&!b.holes.length&&area>32&&area<300&&H>5&&H<16&&['house','terrace'].includes(type)&&h3<0.35){
+      roofKind=h3<0.17?'hipped':'gable';roofH=Math.min(rad*0.39,3.8,H*0.26);
+    }
+    else if(!rs&&!landmarkStyle&&!onWater&&!b.pt&&!b.sky&&type!=='roof'&&st<=3&&H<34&&H>8&&ring.length<=16&&!b.holes.length&&area>60&&h3<(st===0?0.5:st===3?0.45:0.35))roofKind='mansard';
     const mansH=2.9;let wallTop=H-roofH;if(roofKind==='mansard'){if(b.H||levels)wallTop=H-mansH;}
     if(wallTop<=minH+0.5)wallTop=minH+Math.max(0.6,H-minH);
     const ch=chunkAt(cx,cz);const fb=ch.w[st];const tint=toByte(tintFor(st,h2,b));
@@ -949,10 +1002,11 @@ function buildBuildings(){
     const isResid=!isShop&&['residential','apartments','house','terrace','yes'].includes(type)&&(st===1||st===2||st===3);
     const gH=minH>0.5?0:isShop?4.3:flH*(st===0?1.25:1.08);
     const vari=Math.floor(h2*199);const seed=Math.floor(h*65535);
+    const variant=landmarkStyle?0:facadeVariant(b,type,st,H,h3);
     const flatPara=roofKind==='flat'&&!b.sky&&type!=='roof'&&!onWater;const paraVari=flatPara?vari:220;
     for(const e of edges){if(minH<2.5&&!b.sky)addSegment(e.a[0],e.a[1],e.c[0],e.c[1]);const nb=Math.max(0,Math.floor((e.L-0.9)/S.b));const span=nb*S.b;const margin=(e.L-span)/2;
       const gt=e.et===1?(isShop?1:isResid?2:0):0;const F=[Math.round(flH*100),Math.round(S.b*100),Math.round(span*10),seed];
-      const facadeFlags=e.et+gt*4+(landmarkStyle==='courts'?16:0);
+      const facadeFlags=e.et+gt*4+(landmarkStyle==='courts'?16:0)+variant*32;
       const G=[Math.round(wallTop*10),Math.round((minH>0.5?0:gH)*10),facadeFlags,paraVari];
       const nA=e.nx,nZ=e.nz;const flip=(-(e.c[1]-e.a[1]))*nA+(e.c[0]-e.a[0])*nZ<0;
       const jx=nA*jit,jz=nZ*jit;
@@ -978,7 +1032,7 @@ function buildBuildings(){
     if(roofKind==='flat'){roofTris(ch.roof,ring,b.holes,flatPara?wallTop-0.9:wallTop,roofCol);
       if(flatPara)for(const e of edges){if(e.isHole)continue;const a=e.a,c=e.c,ia=[a[0]-e.nx*0.32,a[1]-e.nz*0.32],ic=[c[0]-e.nx*0.32,c[1]-e.nz*0.32];ch.trim.quad([a[0],wallTop,a[1]],[c[0],wallTop,c[1]],[ic[0],wallTop,ic[1]],[ia[0],wallTop,ia[1]],[0,1,0],toByte(TRIM[st]));}
       if(!landmarkStyle&&!b.sky&&area>250&&st!==2&&st!==3){const n=Math.min(5,Math.floor(area/300)+1);let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const p of ring){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);}
-        for(let k=0;k<n*3&&PLANT.length<40000;k++){const x=rr(x0,x1),z=rr(z0,z1);if(!pointInRing(x,z,ring))continue;PLANT.push([x,wallTop-0.9,z,rr(1.5,5),rr(1.2,3.2),rr(1.5,4),Math.atan2(-(ring[1][1]-ring[0][1]),ring[1][0]-ring[0][0])]);if(k>n)break;}}}
+        for(let k=0;k<n*3&&PLANT.length<40000;k++){const x=rr(x0,x1),z=rr(z0,z1);if(!pointInRing(x,z,ring)||b.holes.some(h=>pointInRing(x,z,h)))continue;PLANT.push([x,wallTop-0.9,z,rr(1.5,5),rr(1.2,3.2),rr(1.5,4),Math.atan2(-(ring[1][1]-ring[0][1]),ring[1][0]-ring[0][0])]);if(k>n)break;}}}
     else if(roofKind==='mansard'){const inner=insetRing(ring,1.5,-sgn);if(!inner){roofTris(ch.roof,ring,[],wallTop,roofCol);}
       else{const mb=ch.w[7];const slate=[90,96,104];for(let i=0;i<ring.length;i++){const a=ring[i],c=ring[(i+1)%ring.length],ia=inner[i],ic=inner[(i+1)%ring.length];const L=Math.hypot(c[0]-a[0],c[1]-a[1]);if(L<0.3)continue;
           const e=edges.find(q=>q.a===a);const nA=e?e.nx:0,nZ=e?e.nz:0;const ny=0.47,k=Math.sqrt(1-ny*ny);const nb=Math.max(0,Math.floor((L-1.5)/SP[7].b));const span=nb*SP[7].b,mg=(L-span)/2;const sl=Math.hypot(1.5,mansH);
@@ -991,10 +1045,7 @@ function buildBuildings(){
         for(let i=0;i<p.count;i++)ch.roof.v(p.getX(i),p.getY(i),p.getZ(i),nn.getX(i),nn.getY(i),nn.getZ(i),dc);for(let i=0;i<ix.length;i++)ch.roof.i.p1(base+ix[i]);}
       else{const apex=[cx,wallTop+roofH,cz];for(const e of edges){if(e.isHole)continue;const ny=0.6;const nn=[e.nx*0.8,ny,e.nz*0.8];const i0=ch.roof.v(e.a[0],wallTop,e.a[1],...nn,roofCol),i1=ch.roof.v(e.c[0],wallTop,e.c[1],...nn,roofCol),i2=ch.roof.v(apex[0],apex[1],apex[2],...nn,roofCol);
         ch.roof.i.p3(i0,i1,i2);ch.roof.i.p3(i0,i2,i1);}}}
-    else if(roofKind==='gable'){const r4=ring;const l0=Math.hypot(r4[1][0]-r4[0][0],r4[1][1]-r4[0][1]),l1=Math.hypot(r4[2][0]-r4[1][0],r4[2][1]-r4[1][1]);const o=l0>l1?1:0;
-      const m1=[(r4[o][0]+r4[o+1][0])/2,(r4[o][1]+r4[o+1][1])/2],m2=[(r4[(o+2)%4][0]+r4[(o+3)%4][0])/2,(r4[(o+2)%4][1]+r4[(o+3)%4][1])/2];const yR=wallTop+roofH;
-      const quads=[[r4[(o+1)%4],r4[(o+2)%4],m2,m1],[r4[(o+3)%4],r4[o%4],m1,m2]];for(const q of quads){const i0=ch.roof.v(q[0][0],wallTop,q[0][1],0,1,0,roofCol),i1=ch.roof.v(q[1][0],wallTop,q[1][1],0,1,0,roofCol),i2=ch.roof.v(q[2][0],yR,q[2][1],0,1,0,roofCol),i3=ch.roof.v(q[3][0],yR,q[3][1],0,1,0,roofCol);ch.roof.i.p3(i0,i1,i2);ch.roof.i.p3(i0,i2,i3);ch.roof.i.p3(i0,i2,i1);ch.roof.i.p3(i0,i3,i2);}
-      for(const [p0,p1,m] of [[r4[o%4],r4[(o+1)%4],m1],[r4[(o+2)%4],r4[(o+3)%4],m2]]){const i0=ch.roof.v(p0[0],wallTop,p0[1],0,0,1,tint),i1=ch.roof.v(p1[0],wallTop,p1[1],0,0,1,tint),i2=ch.roof.v(m[0],yR,m[1],0,0,1,tint);ch.roof.i.p3(i0,i1,i2);ch.roof.i.p3(i0,i2,i1);}}
+    else if(roofKind==='gable'||roofKind==='hipped')pitchedRoof(ch.roof,ring,wallTop,roofH,roofKind==='hipped',roofCol,tint);
     if(minH>0.5&&roofKind!=='mansard')roofTris(ch.roof,ring,b.holes,minH,[60,60,62]);
     NB++;}
   // 生成网格
@@ -1045,11 +1096,17 @@ function addCircle(x,z,r){const key=ckey(Math.floor(x/CELL),Math.floor(z/CELL));
 const _hit={x:0,z:0,nx:0,nz:0,hit:false,depth:0};
 // 将半径 r 的圆从静态实体中推出来，返回修正后的位置与碰撞法线
 function collideCircle(x,z,r,out=_hit){out.hit=false;out.nx=0;out.nz=0;out.depth=0;const S=SEGS.a;
-  for(let pass=0;pass<2;pass++){const ix0=Math.floor((x-r)/CELL),ix1=Math.floor((x+r)/CELL),iz0=Math.floor((z-r)/CELL),iz1=Math.floor((z+r)/CELL);
+  const reach=r+largestStaticCircle;
+  for(let pass=0;pass<2;pass++){const ix0=Math.floor((x-reach)/CELL),ix1=Math.floor((x+reach)/CELL),iz0=Math.floor((z-reach)/CELL),iz1=Math.floor((z+reach)/CELL);
     for(let ix=ix0;ix<=ix1;ix++)for(let iz=iz0;iz<=iz1;iz++){const key=ckey(ix,iz);
       const sl=SEG_HASH.get(key);if(sl)for(const i of sl){const ax=S[i*4],az=S[i*4+1],bx=S[i*4+2],bz=S[i*4+3];const vx=bx-ax,vz=bz-az,L2=vx*vx+vz*vz||1;let t=((x-ax)*vx+(z-az)*vz)/L2;t=t<0?0:t>1?1:t;
         const dx=x-(ax+vx*t),dz=z-(az+vz*t),d2=dx*dx+dz*dz;if(d2<r*r){const d=Math.sqrt(d2)||1e-4;const nx=d2>1e-8?dx/d:-vz/Math.sqrt(L2),nz=d2>1e-8?dz/d:vx/Math.sqrt(L2);const pen=r-d;x+=nx*pen;z+=nz*pen;out.hit=true;out.nx+=nx*pen;out.nz+=nz*pen;out.depth=Math.max(out.depth,pen);}}
-      const cl=CIRC_HASH.get(key);if(cl)for(let j=0;j<cl.length;j+=3){const dx=x-cl[j],dz=z-cl[j+1],rr2=r+cl[j+2],d2=dx*dx+dz*dz;if(d2<rr2*rr2&&d2>1e-8){const d=Math.sqrt(d2),pen=rr2-d;x+=dx/d*pen;z+=dz/d*pen;out.hit=true;out.nx+=dx/d*pen;out.nz+=dz/d*pen;out.depth=Math.max(out.depth,pen);}}}}
+      const cl=CIRC_HASH.get(key);if(cl)for(let j=0;j<cl.length;j+=3){
+        const dx=x-cl[j],dz=z-cl[j+1],radius=r+cl[j+2],distance=Math.hypot(dx,dz);
+        if(distance>=radius)continue;
+        const nx=distance>1e-8?dx/distance:1,nz=distance>1e-8?dz/distance:0,pen=radius-distance;
+        x+=nx*pen;z+=nz*pen;out.hit=true;out.nx+=nx*pen;out.nz+=nz*pen;out.depth=Math.max(out.depth,pen);
+      }}}
   const l=Math.hypot(out.nx,out.nz);if(l>0){out.nx/=l;out.nz/=l;}out.x=x;out.z=z;return out;}
 // 线段射线检测：返回最近命中距离（无命中返回 Infinity），供 AI / 模组使用
 function raycast(x0,z0,x1,z1){const S=SEGS.a;let best=Infinity;const L=Math.hypot(x1-x0,z1-z0);const n=Math.ceil(L/CELL)+1;const seen=new Set();
@@ -1069,14 +1126,35 @@ function buildTrees(){
   for(const g of GREEN){if(!['park','garden','grass','recreation_ground','cemetery','grave_yard','religious'].includes(g.k))continue;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const p of g.ring){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1]);}
     const n=Math.min(600,(x1-x0)*(z1-z0)/(g.k==='park'?240:400));for(let i=0;i<n;i++){const x=rr(x0,x1),z=rr(z0,z1);if(!pointInRing(x,z,g.ring)||isBld(x,z)||isWater(x,z)||roadCls(x,z)>0)continue;
       let near=false;for(const t of list.slice(-40))if((t[0]-x)**2+(t[1]-z)**2<36){near=true;break;}if(!near)list.push([x,z,1]);}}
-  const trunkGeo=new THREE.CylinderGeometry(0.22,0.36,1,7);trunkGeo.translate(0,0.5,0);
+  const trunkPieces=[new THREE.CylinderGeometry(0.20,0.36,1.06,8,2).translate(0,0.53,0)];
+  for(const [side,az] of [[-1,0.32],[1,-0.29],[1,0.33]]){
+    const from=new THREE.Vector3(0,0.62,0),to=new THREE.Vector3(side*0.65,1.11,az);
+    const delta=to.clone().sub(from),mid=from.clone().lerp(to,0.5);
+    const rotation=new THREE.Quaternion().setFromUnitVectors(UP,delta.clone().normalize());
+    trunkPieces.push(new THREE.CylinderGeometry(0.029,0.122,delta.length(),6).applyQuaternion(rotation).translate(...mid.toArray()));
+  }
+  const trunkGeo=mergeGeometries(trunkPieces);trunkPieces.forEach(geo=>geo.dispose());
   const leafMat=std({map:texLeaf(),roughness:0.9});addWind(leafMat,0.004);
   const trunks=[],crowns=TREE_TYPES.map(()=>[]);
   for(const [x,z,park] of list){const h=hash2(Math.round(x*7),Math.round(z*7));const ti=park?(h<0.45?0:h<0.7?1:h<0.85?3:2):(h<0.5?0:h<0.75?1:h<0.9?2:3);const T=TREE_TYPES[ti];
     const s=rr(0.85,1.3),ry=rand()*6.28;trunks.push({x,z,sx:s*T.trunk[0],sy:s*T.trunk[1],sz:s*T.trunk[0],ry,c:_c.setRGB(...T.bark).clone()});
     crowns[ti].push({x,z,sx:s*rr(1,1.2),sy:s*rr(0.95,1.15),sz:s*rr(1,1.2),ry,c:_c.setHSL(rr(...T.hue),rr(...T.sat),rr(...T.lum)).clone()});addCircle(x,z,0.32*s*T.trunk[0]+0.05);setOcc(x,z);}
-  instMesh(trunkGeo,std({map:texBark(),roughness:0.95}),trunks);
-  TREE_TYPES.forEach((T,i)=>{if(crowns[i].length)instMesh(T.cone?coniferGeo():blobGeo(T.parts,1,0.4),leafMat,crowns[i]);});TREES=list;
+  // A single city-wide batch renders every tree whenever any tree is in view.
+  // Tile the batches while sharing geometry and materials across the map.
+  const batchTrees=(geometry,material,instances,name)=>{
+    const tiles=new Map();
+    for(const tree of instances){
+      const key=Math.floor(tree.x/320)+','+Math.floor(tree.z/320);
+      if(!tiles.has(key))tiles.set(key,[]);
+      tiles.get(key).push(tree);
+    }
+    for(const tile of tiles.values())instMesh(geometry,material,tile).name=name;
+  };
+  batchTrees(trunkGeo,std({map:texBark(),roughness:0.95}),trunks,'Tree trunks');
+  TREE_TYPES.forEach((T,i)=>{
+    if(crowns[i].length)batchTrees(T.cone?coniferGeo():blobGeo(T.parts,1,0.4),leafMat,crowns[i],T.name+' tree crowns');
+  });
+  TREES=list;
 }
 let TREES=[];
 const lampSpots=[];
@@ -1109,14 +1187,19 @@ function toPavement(x,z){const f=roadFrameFast(x,z,16);if(!f)return {x,z,ry:0};c
 function buildProps(){
   const black=std({color:0x15171a,roughness:0.5,metalness:0.3}),red=std({color:0xc8102e,roughness:0.45}),white=std({color:0xf2f2ee,roughness:0.5}),glassM=std({color:0x9fb2bf,roughness:0.05,metalness:0.6,transparent:true,opacity:0.35});
   const steel=std({color:0x8a9096,roughness:0.4,metalness:0.6}),wood=std({color:0x6a4a32,roughness:0.8});
-  const phoneTex=texPhone(),round=texRoundel();const phoneMat=std({map:phoneTex,roughness:0.45}),roundMat=std({map:round,roughness:0.5,emissive:0xffffff,emissiveMap:round,emissiveIntensity:0.05});
+  const round=texRoundel();const roundMat=std({map:round,roughness:0.5,emissive:0xffffff,emissiveMap:round,emissiveIntensity:0.05});
   SIG_MATS=[std({color:0x220000,emissive:0xff2010,emissiveIntensity:0}),std({color:0x221400,emissive:0xffa000,emissiveIntensity:0}),std({color:0x002210,emissive:0x20ff70,emissiveIntensity:0})];
   BEACON_MAT=std({color:0xffa020,emissive:0xff9010,emissiveIntensity:1,roughness:0.3});
   const stripe=canvasTex(64,(g,S)=>{for(let i=0;i<8;i++){g.fillStyle=i%2?'#111':'#f2f2f2';g.fillRect(0,i*S/8,S,S/8);}});const stripeMat=std({map:stripe});
   const zebraMat=std({color:0xeeeeea,roughness:0.6,polygonOffset:true,polygonOffsetFactor:-4,polygonOffsetUnits:-8});
   // 红色电话亭 K6
-  for(const [x0,z0] of PTS.phone||[]){const s=toPavement(x0,z0);if(isBld(s.x,s.z))continue;const g=grp(s.x,s.z,s.ry);add(g,new THREE.BoxGeometry(0.92,2.35,0.92),phoneMat,0,1.18,0);add(g,new THREE.BoxGeometry(1.0,0.12,1.0),red,0,0.06,0);
-    add(g,new THREE.CylinderGeometry(0.5,0.5,0.92,16,1,false,0,Math.PI).rotateZ(Math.PI/2).scale(1,0.4,1),red,0,2.42,0);add(g,new THREE.BoxGeometry(1.02,0.12,1.02),red,0,2.38,0);setOcc(s.x,s.z);addCircle(s.x,s.z,0.62);}
+  for(const [x0,z0] of PTS.phone||[]){
+    const s=toPavement(x0,z0);
+    if(isBld(s.x,s.z))continue;
+    grp(s.x,s.z,s.ry).add(telephoneKiosk());
+    setOcc(s.x,s.z);
+    addCircle(s.x,s.z,0.62);
+  }
   // 邮筒
   for(const [x0,z0] of PTS.post||[]){const s=toPavement(x0,z0);if(isBld(s.x,s.z))continue;const g=grp(s.x,s.z,s.ry);add(g,new THREE.CylinderGeometry(0.28,0.3,1.45,16),red,0,0.72,0);add(g,new THREE.SphereGeometry(0.31,16,8,0,Math.PI*2,0,Math.PI/2).scale(1,0.55,1),red,0,1.45,0);
     add(g,new THREE.CylinderGeometry(0.31,0.31,0.1,16),black,0,0.05,0);add(g,new THREE.BoxGeometry(0.24,0.04,0.05),black,0,1.2,0.28);setOcc(s.x,s.z);addCircle(s.x,s.z,0.33);}
@@ -1130,7 +1213,19 @@ function buildProps(){
   // 地铁入口标志
   for(const [x0,z0] of PTS.tube||[]){const s=toPavement(x0,z0);const g=grp(s.x,s.z,s.ry);add(g,new THREE.CylinderGeometry(0.07,0.07,3.2,8),black,0,1.6,0);add(g,new THREE.CylinderGeometry(0.5,0.5,0.05,24).rotateZ(Math.PI/2),roundMat,0,3.3,0);addCircle(s.x,s.z,0.12);}
   // 长椅 / 垃圾桶
-  for(const [x0,z0] of PTS.bench||[]){if(isBld(x0,z0)||roadCls(x0,z0)>0)continue;const g=grp(x0,z0,rand()*6.28);add(g,new THREE.BoxGeometry(1.7,0.06,0.45),wood,0,0.45,0);add(g,new THREE.BoxGeometry(1.7,0.4,0.05),wood,0,0.72,-0.22);for(const sd of [-0.75,0.75])add(g,new THREE.BoxGeometry(0.06,0.45,0.45),black,sd,0.22,0);addCircle(x0,z0,0.75);}
+  for(const [x,z] of PTS.bench||[]){
+    if(isBld(x,z)||roadCls(x,z)>0)continue;
+    const g=grp(x,z,rand()*6.28);
+    const back=hash2(Math.floor(x*4),Math.floor(z*4))>0.22;
+    for(let i=0;i<4;i++)add(g,new THREE.BoxGeometry(1.70,0.042,0.096),wood,0,0.45,-0.168+i*0.112);
+    if(back)for(let i=0;i<3;i++)add(g,new THREE.BoxGeometry(1.70,0.092,0.032),wood,0,0.59+i*0.117,-0.227-i*0.018,0.15);
+    for(const side of [-0.70,0.70]){
+      add(g,new THREE.BoxGeometry(0.048,0.39,0.055),black,side,0.21,0.151,0.075);
+      add(g,new THREE.BoxGeometry(0.045,back?0.83:0.40,0.065),black,side,back?0.416:0.20,-0.175,-0.13);
+      if(back)add(g,new THREE.BoxGeometry(0.049,0.044,0.33),black,side,0.663,-0.043);
+    }
+    addCircle(x,z,0.75);
+  }
   for(const [x0,z0] of PTS.bin||[]){const s=toPavement(x0,z0);if(isBld(s.x,s.z))continue;const g=grp(s.x,s.z);add(g,new THREE.CylinderGeometry(0.28,0.26,0.95,12),black,0,0.48,0);addCircle(s.x,s.z,0.3);}
   // 斑马线 / 信号灯人行横道 / 贝利沙信标灯
   for(const [x,z,t] of PTS.cross||[]){const f=roadFrameFast(x,z,6);if(!f||f.r.kind!=='car')continue;const w=f.r.w,nx=-f.tz,nz=f.tx;const ry=Math.atan2(f.tx,f.tz);const g=grp(f.px,f.pz,ry,0.045);
@@ -1585,13 +1680,35 @@ function updateLife(dt){
    ========================================================= */
 let EYE=null;
 function buildEye(){const [x,z]=proj(51.50330,-0.11952);if(Math.hypot(x,z)>RAD+200)return;const g=new THREE.Group();g.position.set(x,0,z);g.rotation.y=1.32;scene.add(g);
+  g.name='London Eye';
   const wm=std({color:0xf2f2f0,metalness:0.5,roughness:0.35});const wheel=new THREE.Group();wheel.position.y=69;g.add(wheel);
   wheel.add(new THREE.Mesh(new THREE.TorusGeometry(61,0.9,8,120),wm),new THREE.Mesh(new THREE.TorusGeometry(58,0.45,6,120),wm),new THREE.Mesh(new THREE.CylinderGeometry(2.6,2.6,7,16).rotateX(Math.PI/2),wm));
   const sp=[];for(let i=0;i<64;i++){const a=i/64*Math.PI*2;sp.push(0,0,i%2?1.5:-1.5,Math.cos(a)*59,Math.sin(a)*59,0);}const sg=new THREE.BufferGeometry();sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));wheel.add(new THREE.LineSegments(sg,new THREE.LineBasicMaterial({color:0xcfd3d6})));
-  const capGeo=new THREE.SphereGeometry(1,18,10);capGeo.scale(4,2.4,2.4);const capMat=std({color:0xcfe4ee,metalness:0.6,roughness:0.08,emissive:0xfff0d8,emissiveIntensity:0});const caps=[];
-  for(let i=0;i<32;i++){const a=i/32*Math.PI*2;const c=new THREE.Mesh(capGeo,capMat);c.position.set(Math.cos(a)*63.5,Math.sin(a)*63.5,0);c.rotation.y=Math.PI/2;wheel.add(c);caps.push(c);}
+  const capGeo=new THREE.SphereGeometry(1,20,12).scale(2.28,2.27,4.06);
+  const capMat=std({color:0x8aa4ae,metalness:0.55,roughness:0.18,emissive:0xffe4c1,emissiveIntensity:0});
+  const bands=[new THREE.TorusGeometry(1,0.035,5,20).scale(2.31,2.31,1),
+    ...[-2.51,2.51].map(z=>new THREE.TorusGeometry(1,0.034,5,20).scale(1.80,1.80,1).translate(0,0,z)),
+    new THREE.BoxGeometry(3.61,0.12,5.02).translate(0,-1.45,0)];
+  const bandGeo=mergeGeometries(bands);bands.forEach(part=>part.dispose());
+  const caps=[new THREE.InstancedMesh(capGeo,capMat,32),new THREE.InstancedMesh(bandGeo,wm,32)];
+  for(const mesh of caps){
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.boundingSphere=new THREE.Sphere(new THREE.Vector3(),69);
+    wheel.add(mesh);
+  }
+  const capsuleMatrix=new THREE.Matrix4();
+  function updateCapsules(){
+    const azimuth=wheel.rotation.z;
+    for(let i=0;i<32;i++){
+      const angle=i/32*Math.PI*2;
+      capsuleMatrix.makeRotationZ(-azimuth).setPosition(Math.cos(angle)*63.5,Math.sin(angle)*63.5,0);
+      for(const mesh of caps)mesh.setMatrixAt(i,capsuleMatrix);
+    }
+    for(const mesh of caps)mesh.instanceMatrix.needsUpdate=true;
+  }
+  updateCapsules();
   for(const sd of [1,-1]){const leg=new THREE.Mesh(new THREE.CylinderGeometry(1.4,1.9,78,10),wm);leg.position.set(sd*15,35,20);leg.rotation.set(-0.5,0,sd*0.2);leg.castShadow=true;g.add(leg);}
-  for(const m of wheel.children)m.castShadow=true;EYE={wheel,caps,capMat};}
+  for(const m of wheel.children)m.castShadow=true;EYE={wheel,updateCapsules,capMat};}
 
 /* =========================================================
    时间 / 光照
@@ -2374,9 +2491,9 @@ function setupUI(){
   document.querySelectorAll('[data-street]').forEach(section=>{section.hidden=activity!=='street';});
   document.querySelectorAll('[data-sightseeing]').forEach(section=>{section.hidden=activity!=='sightseeing';});
   document.querySelectorAll('.modes button').forEach(b=>b.addEventListener('click',()=>{setMode(b.dataset.mode);resumeGame();}));
-  POIS=[['KCL Strand','KCL Strand',51.5115,-0.1160,[70,45,90]],['Somerset House','萨默塞特宫',51.5110775,-0.1171475,[-28,60,-68],11],['Bush House','布什大楼',51.5130730,-0.1173640,[-25,18,-68],15],['Covent Garden','考文特花园',51.5118,-0.1229,[70,50,80]],
-    ['Trafalgar Square','特拉法加广场',51.5080,-0.1281,[90,70,100]],['Big Ben','大本钟',51.5007,-0.1246,[89,24,-75],47],['London Eye','伦敦眼',51.5033,-0.1196,[-150,70,180]],['Waterloo','滑铁卢',51.5031,-0.1132,[100,70,120]],
-    ['Southbank Centre','南岸艺术中心',51.5058,-0.1167,[-80,50,100]],["St Paul's Cathedral",'圣保罗大教堂',51.51378,-0.0988,[-134,49,95],49],['Royal Courts of Justice','皇家司法院',51.5134735,-0.1135462,[-18,17,58],17],
+  POIS=[['KCL Strand','KCL Strand',51.5115,-0.1160,[70,45,90]],['Somerset House','萨默塞特宫',51.5110775,-0.1171475,[-28,60,-68],11],['Bush House','布什大楼',51.5130730,-0.1173640,[-11,5,-32],12],['Covent Garden','考文特花园',51.5118,-0.1229,[70,50,80]],
+    ['Trafalgar Square','特拉法加广场',51.5080,-0.1281,[90,70,100]],['Big Ben','大本钟',51.5007,-0.1246,[89,24,-75],47],['London Eye','伦敦眼',51.5033,-0.1196,[-130,5,205],60],['Waterloo','滑铁卢',51.5031,-0.1132,[100,70,120]],
+    ['Southbank Centre','南岸艺术中心',51.5058,-0.1167,[-80,50,100]],["St Paul's Cathedral",'圣保罗大教堂',51.51378,-0.0988,[-134,49,95],49],['Royal Courts of Justice','皇家司法院',51.5134735,-0.1135462,[10,5,34],12],
     ["Guy's Campus",'盖伊校区',51.5032,-0.0876,[120,90,150]],["Lincoln's Inn Fields",'林肯律师学院广场',51.5159,-0.1172,[70,60,90]],['Overview','全景',51.5100,-0.1150,[900,1100,1300]]]
     .map(([en,zh,la,lo,off,height=6])=>({name:{en,zh},la,lo,off,height}));
   const pb=document.getElementById('pois');for(const p of POIS){const [x,z]=proj(p.la,p.lo);const b=document.createElement('button');b.textContent=p.name[LANG];b.onclick=()=>{if(mode==='drive')setMode('orbit');flyTo(new THREE.Vector3(x,p.height,z),new THREE.Vector3(...p.off));showToast(p.name[LANG]);resumeGame();};pb.appendChild(b);}
@@ -2616,7 +2733,7 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
   updateWeatherView(camera);
   gradePass.uniforms.uTime.value=uTime.value;
   if((mode==='drive'||mode==='strand')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
-  if(EYE){EYE.wheel.rotation.z+=dt*0.0035;for(const c of EYE.caps)c.rotation.z=-EYE.wheel.rotation.z;}
+  if(EYE?.wheel.parent.visible){EYE.wheel.rotation.z+=dt*0.0035;EYE.updateCapsules();}
   waterNormal.offset.x+=dt*0.0008;waterNormal.offset.y+=dt*0.0005;
 
   renderScene(dt);
@@ -2766,6 +2883,7 @@ function parkStrandCar(){
   driveCam=new DriveCamera(camera);
   // Red phone box (time machine) on the pavement just ahead of the car.
   const fwd=car.forward();const spot=freeSpot(car.position.x+fwd.x*12+fwd.z*7,car.position.z+fwd.z*12-fwd.x*7);
+  addCircle(spot.x,spot.z,0.62);
   warp=new TimeWarp(scene,spot.x,spot.z,{
     onRetroChange:on=>{
       driveCam.view=on?'overhead':'chase';

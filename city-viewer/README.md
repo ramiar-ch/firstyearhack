@@ -54,7 +54,7 @@ You can use `?play=street` or `?play=sightseeing` to bypass the main menu. Sight
 ## What is real and what is generated
 
 - **Real (OpenStreetMap):** street layout and names, one-way streets, bus lanes, building footprints and heights/storeys where tagged, the Thames, bridges, rail viaducts, parks, street trees, and the positions of traffic lights, crossings, bus stops, phone boxes, post boxes, benches and Tube entrances.
-- **Generated:** facades of ordinary buildings (London styles: Portland stone, Victorian red brick, Georgian stock brick, stucco, glass, concrete, warehouse), shopfronts, mansard roofs, chimneys, tree species (London plane, lime, birch, conifer), vehicles including classic Routemaster-style double-deckers, cyclists, shared bicycle stations, and pedestrians of different ages. Heights are estimated where OSM has none. The ground is flat.
+- **Generated:** Portland stone, Victorian red brick, Georgian stock brick, stucco, glass and concrete facades, with variants for Deco pilasters, warehouses, finned curtain walls and terraced houses. Roofs include mansards, gables and hips. Traffic includes hatchbacks, saloons, estate cars, taxis, vans, two styles of double-decker and bicycles. Seven pedestrian profiles vary by age, clothing, build and walking pace. Original map footprints are used, with heights estimated where OSM has none.
 
 The Places menu frames the detailed landmark models. Elizabeth Tower's four dials follow the viewer clock, and Somerset House's courtyard fountains animate in close views. Architectural references include [UK Parliament](https://virtualtours-assets.parliament.uk/elizabeth-tower/index.html), [St Paul's Cathedral](https://www.stpauls.co.uk/wren-office-drawings), [Somerset House](https://www.somersethouse.org.uk/venue-hire/our-spaces/the-edmond-j-safra-fountain-court), and the Historic England listings for [Bush House](https://historicengland.org.uk/listing/the-list/list-entry/1066492) and the [Royal Courts of Justice](https://historicengland.org.uk/listing/the-list/list-entry/1264258).
 
@@ -62,7 +62,7 @@ The Places menu frames the detailed landmark models. Elizabeth Tower's four dial
 
 Building walls (from the OSM footprints), Thames embankments, bridge parapets and railway viaduct walls are stored as line segments. Trees, posts, docks, street furniture and viaduct piers use circles. Walking, driving and cycling use the same collision world. Each car, bus and bicycle has a footprint that turns with it. The player and AI traffic check the full motion to the next position against those footprints and static obstacles. Traffic follows the road network on the left and yields to red lights and occupied space.
 
-Run the collision, phone pairing, save, shortcut and nearby vehicle regression tests with `node --test tools/test-traffic.js tools/test-relay.js tools/test-save-controls.js tools/test-nearby-vehicles.js` from `city-viewer`.
+Run all regression tests from the repository root with `npm test`. The suite covers game and controller script parsing, collision, pairing, saves, shortcuts, nearby vehicles and the solo driving camera.
 
 A racing or game mod can use the world through `window.CityWorld`. It is available after the page fires the `cityworld-ready` event. Coordinates are metres, with x pointing east and z pointing south from the Strand campus.
 

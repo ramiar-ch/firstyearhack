@@ -137,7 +137,7 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
       ctx.fillRect(i%5===0?-3:-1.5,-224,i%5===0?6:3,i%5===0?18:10);ctx.restore();
     }
     ctx.font='bold 36px Georgia,serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='#263747';
-    const labels=['XII','I','II','III','IV','V','VI','VII','VIII','IX','F','XI'];
+    const labels=['XII','I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
     for (const [i,label] of labels.entries()) {
       const a=i*TAU/12;
       ctx.fillText(label,178*Math.sin(a),-178*Math.cos(a));
@@ -199,6 +199,12 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
       for (const y of [12.5,20.5,32.5,40.2]) {
         for (const x of [-1.07,1.07]) opening(face,x,y,5.86,0.67,3.2,0.53,{pointed:true,border:0.16,frame:towerTrim});
       }
+      for(const y of [13.1,21.1,33.1,40.8]){
+        for(const x of [-1.07,1.07])face.box(0.061,2.11,0.12,x,y+0.54,5.99,0x817763);
+      }
+      for(let i=0;i<12;i++)for(const y of [46.62,60.08]){
+        face.box(0.38,0.34,0.27,-4.78+i*0.87,y,6.15,towerTrim);
+      }
       for (const x of [-2.85,0,2.85]) {
         opening(face,x,61.5,4.67,1.49,5.7,1.23,{pointed:true,border:0.15,frame:towerTrim,fill:iron});
         for (let i=0;i<7;i++) face.box(1.35,0.11,0.10,x,61.96+i*0.54,4.84,0x79776b);
@@ -254,6 +260,9 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
       if (i%4===2) {
         const bay=dome.frame(nx*14.52,nz*14.52,a);
         opening(bay,0,48.3,0.02,1.28,6.25,0.67,{border:0.19,fill:0x4b5255});
+        bay.box(0.065,4.90,0.09,0,50.93,0.145,shadeStone);
+        bay.box(1.37,0.16,0.36,0,48.20,0.14,lightStone);
+        for(const y of [49.61,51.44,53.17])bay.box(1.06,0.070,0.062,0,y,0.155,shadeStone);
       }
     }
     for (const [radius,y,h] of [[16.8,60.65,0.48],[17.2,61.20,0.58],[17.75,61.81,0.55],[18.0,62.32,0.36],[17.55,63.56,0.28]]) {
@@ -329,6 +338,10 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
       face.box(2.18,3.95,0.10,x,2.02,0.66,0x363f43);
       face.box(0.09,3.85,0.10,x,2.1,0.74,0x716352,metal);
       face.box(2.17,0.11,0.10,x,3.32,0.73,0x716352,metal);
+      for(const side of [-1,1]){
+        face.box(0.81,1.50,0.055,x+side*0.51,1.01,0.728,0x454e4c);
+        face.box(0.074,0.28,0.074,x+side*0.14,1.56,0.79,0x8d7d5b,metal);
+      }
     }
     cornice(face,16,24,0.58,0.33);
     bush.finish();
@@ -346,6 +359,7 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
     for (let row=-3;row<=3;row++) for (let col=-2;col<=2;col++) {
       const u=col*2.35,v=row*2.26;
       face.round(0.12,0.12,0.026,u,0.087,v,0x706d66,metal,10);
+      face.round(0.061,0.061,0.031,u,0.092,v,0x4d5350,metal,8);
       nozzles.push([u,v]);
     }
     const jets=new THREE.InstancedMesh(new THREE.CylinderGeometry(0.028,0.041,1,7),
@@ -401,6 +415,11 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
     for (let i=0;i<8;i++) {
       const a=i*TAU/8;
       face.beam([0,12.63,0.54],[0.81*Math.cos(a),12.63+0.81*Math.sin(a),0.54],0.065,lightStone);
+    }
+    for(const sign of [-1,1]){
+      face.beam([sign*1.18,9.26,0.70],[sign*0.42,10.65,0.70],0.085,lightStone);
+      face.mesh(new THREE.TorusGeometry(0.32,0.058,6,20).translate(sign*0.52,12.63,0.61),lightStone);
+      face.box(0.12,2.24,0.16,sign*1.19,1.58,0.74,0x777267);
     }
     pediment(face,10.7,15.3,0.42,4.08,lightStone);
     court.finish();
