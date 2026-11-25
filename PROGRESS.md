@@ -8,6 +8,7 @@ Improve all visible model families in Strand Theft Auto toward a consistent, rea
 
 ## Current checkpoint
 
+- Stage 1 (2026-11-25): Street Missions now opens a save screen with New game, a dated save card with mission count and money, and Resume for a paused Street world. Browser verification covered no-save startup, Back/Esc, save card visibility, instant resume using the same world instance, and loading after a full reload.
 - Implemented an articulated protagonist with a muted jacket, facial detail, distinct shoes and sleeves, plus displacement-driven steps, knee and ankle bends, arm swing and a jump pose.
 - Implemented solo mouse-drag driving views in Street and Sightseeing, steering assistance while the forward key is held, and smooth recentering after 1.25 seconds without mouse motion.
 - Local verification on 2026-11-25: all 18 `npm test` cases passed. Edge verified dragging at rest, W-assisted physical turning and recentering in both modes, plus the protagonist walking and blending to idle. Visual scoring and the reproducible performance baseline are the first Cloud tasks.

@@ -163,9 +163,15 @@
     <div class="launch-choices" id="mode-choices">
       <button type="button" data-launch="street" class="launch-primary"><strong data-i18n="streetMode">Street Missions</strong><span data-i18n="streetModeDesc">Deliveries, pursuits and local two-player play.</span></button>
       <button type="button" data-launch="sightseeing"><strong data-i18n="sightseeingMode">Sightseeing</strong><span data-i18n="sightseeingModeDesc">Explore London on foot, by vehicle or from the air.</span></button>
-      <button type="button" data-load="street" hidden>Load GTA save</button>
       <button type="button" data-load="sightseeing" hidden>Load Sightseeing save</button>
     </div>
+    <section class="launch-choices" id="street-save-choices" aria-labelledby="street-save-title" hidden>
+      <h2 id="street-save-title" data-i18n="streetMode" tabindex="-1">Street Missions</h2>
+      <button id="continue-street" type="button" data-i18n="resume" hidden>Resume</button>
+      <button type="button" data-load="street" class="launch-primary" hidden><strong data-i18n="loadGame">Load saved game</strong><span class="save-detail"></span></button>
+      <button id="new-street" type="button" data-i18n="newStreet">New game</button>
+      <button id="back-to-modes" type="button" data-i18n="back">Back</button>
+    </section>
     <p id="launcher-status" role="status"></p>
     <div id="exit-screen" hidden>
       <p data-i18n="gameExited">Game ended.</p>
@@ -374,6 +380,8 @@ Object.assign(I18N.en,{saveGame:'Save game',loadGame:'Load saved game',saved:'Pr
 Object.assign(I18N.zh,{saveGame:'保存游戏',loadGame:'读取存档',saved:'进度已保存在此浏览器。',loaded:'已读取存档。',saveFailed:'无法保存，请先检查浏览器存储再退出。',noSave:'未找到兼容的存档。',loadFailed:'无法恢复此存档。',resetBindings:'恢复默认快捷键',bindingTip:'点击按键后按下新键。Esc 取消，已占用的键无法重复绑定。',pressKey:'请按下新键…',keyConflict:'此键已被占用，请选择其他键。',keyInvalid:'请选择字母、数字、方向键、Shift、Ctrl、空格、回车或标点键。',bindingSaved:'快捷键已保存。',bindingFailed:'无法保存快捷键，浏览器存储不可用。',mouseHelp:'鼠标：拖动观察或环绕 · 滚轮缩放 / 飞行速度 · 点击小地图移动。Esc 固定打开菜单。',loadStreet:'读取 GTA 存档',loadSightseeing:'读取观光存档',resumeHint:'选择同一模式立即继续；切换模式时重新加载地图。'});
 Object.assign(I18N.en,{nearbyVehicles:'Nearby vehicles',noNearbyVehicle:'No accessible vehicle within 6 m',noExitSpace:'No clear space to get out',vehiclePickHint:(enter,previous,next)=>`${enter} enter · ${previous}/${next} or wheel to select`});
 Object.assign(I18N.zh,{nearbyVehicles:'附近载具',noNearbyVehicle:'6 米内没有可接近的载具',noExitSpace:'车旁没有安全的下车空间',vehiclePickHint:(enter,previous,next)=>`${enter} 上车 · ${previous}/${next} 或滚轮选择`});
+Object.assign(I18N.en,{newStreet:'New game',streetSaveDetail:(date,passed,money)=>`${date} · ${passed} completed · £${money}`});
+Object.assign(I18N.zh,{newStreet:'开始新游戏',streetSaveDetail:(date,passed,money)=>`${date} · 已完成 ${passed} 个任务 · £${money}`});
 let LANG='en';
 const QS=new URLSearchParams(location.search);if(QS.get('lang')==='zh'||QS.get('lang')==='en')LANG=QS.get('lang');
 const requestedMode=QS.get('mode'), requestedActivity=QS.get('play');
@@ -2124,8 +2132,20 @@ function refreshSaveButtons(){
   document.getElementById('load-game').disabled=!activity||!readSave(activity);
   for(const button of document.querySelectorAll('[data-load]')){
     const save=readSave(button.dataset.load);button.hidden=!save;
-    button.textContent=i18n(button.dataset.load==='street'?'loadStreet':'loadSightseeing')+(save?' · '+new Date(save.savedAt).toLocaleString(LANG==='zh'?'zh-CN':'en-GB'):'');
+    const date=save?new Date(save.savedAt).toLocaleString(LANG==='zh'?'zh-CN':'en-GB'):'';
+    if(button.dataset.load==='street'){
+      button.querySelector('.save-detail').textContent=save?i18n('streetSaveDetail',date,save.missions.passed,save.missions.money):'';
+    }else button.textContent=i18n('loadSightseeing')+(save?' · '+date:'');
   }
+  document.getElementById('continue-street').hidden=!(inMainMenu&&activity==='street');
+}
+function showStreetSaves(show){
+  const street=document.getElementById('street-save-choices');
+  street.hidden=!show;
+  document.getElementById('mode-choices').hidden=show;
+  refreshSaveButtons();
+  if(show)document.getElementById('street-save-title').focus();
+  else document.querySelector('[data-launch="street"]').focus();
 }
 const carSnapshot=c=>c?{position:c.position.toArray(),heading:c.heading,velocity:c.velocity.toArray(),kind:c.kind,colour:c.mesh.userData.colour,sourceId:c.source?.id}:null;
 function saveProgress(){
@@ -2246,6 +2266,7 @@ function leaveSession(exit){
     pauseMenu.close();capturingKey=null;
     document.body.classList.add('in-main-menu');
     document.getElementById('launcher').hidden=false;
+    showStreetSaves(false);
     document.getElementById('launcher-status').textContent=i18n(saved?'resumeHint':'saveFailed');
     document.querySelectorAll('[data-launch]').forEach(b=>{b.disabled=false;});
     refreshSaveButtons();return;
@@ -2263,8 +2284,12 @@ function leaveSession(exit){
   location.replace(url.href);
 }
 function setupMenus(){
-  document.querySelectorAll('[data-launch]').forEach(button=>button.onclick=()=>startSession(button.dataset.launch));
+  document.querySelector('[data-launch="street"]').onclick=()=>showStreetSaves(true);
+  document.querySelector('[data-launch="sightseeing"]').onclick=()=>startSession('sightseeing');
   document.querySelectorAll('[data-load]').forEach(button=>button.onclick=()=>startSession(button.dataset.load,true));
+  document.getElementById('continue-street').onclick=()=>startSession('street');
+  document.getElementById('new-street').onclick=()=>startSession('street',false,true);
+  document.getElementById('back-to-modes').onclick=()=>showStreetSaves(false);
   document.getElementById('save-game').onclick=saveProgress;
   document.getElementById('load-game').onclick=loadProgress;
   document.getElementById('reset-bindings').onclick=()=>commitBindings(defaultBindings());
@@ -2289,6 +2314,9 @@ function setupMenus(){
   pauseMenu.addEventListener('input',()=>{pausedViewDirty=true;});
   pauseMenu.addEventListener('change',()=>{pausedViewDirty=true;});
   addEventListener('keydown',e=>{
+    if(e.code==='Escape'&&!document.getElementById('launcher').hidden&&!document.getElementById('street-save-choices').hidden){
+      e.preventDefault();showStreetSaves(false);return;
+    }
     if(capturingKey){
       e.preventDefault();e.stopImmediatePropagation();
       if(e.repeat)return;
@@ -3046,9 +3074,9 @@ function startupFailed(e){
   document.getElementById('loadmsg').textContent=i18n('loadFail')+e.message;
   document.getElementById('retry-loading').hidden=false;
 }
-async function startSession(selected,fromSave=false){
+async function startSession(selected,fromSave=false,fresh=false){
   if(inMainMenu&&['street','sightseeing'].includes(selected)){
-    if(selected===activity){
+    if(selected===activity&&!fresh){
       if(fromSave){try{const s=readSave(selected);if(!s)throw new Error('No save');restoreProgress(s);}catch(e){document.getElementById('launcher-status').textContent=i18n('loadFailed');return;}}
       inMainMenu=false;readyToPause=true;startup='playing';
       document.body.classList.remove('in-main-menu');document.getElementById('launcher').hidden=true;
@@ -3058,7 +3086,7 @@ async function startSession(selected,fromSave=false){
     phone?.events.close();
     const url=new URL(location.href);
     for(const key of ['mode','car','at','demo','skipIntro','exit','resume'])url.searchParams.delete(key);
-    url.searchParams.set('play',selected);if(readSave(selected))url.searchParams.set('resume','1');
+    url.searchParams.set('play',selected);if(!fresh&&readSave(selected))url.searchParams.set('resume','1');
     location.assign(url.href);return;
   }
   if(startup!=='choosing'||!['street','sightseeing'].includes(selected))return;
