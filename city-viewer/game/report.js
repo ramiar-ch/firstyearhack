@@ -17,7 +17,7 @@ export class PoliceReport {
     if (kind === 'police') s.policeAlerts++;
   }
 
-  async show(money) {
+  async show(money, closeKey = 'K') {
     if (this.overlay) return;
     const stats = { ...this.stats, money, minutesPlayed: Math.round((performance.now() - this.start) / 6000) / 10 };
     this.overlay = document.createElement('div');
@@ -26,6 +26,7 @@ export class PoliceReport {
       <div class="r-ref">Ref: STRAND/${Math.floor(Math.random() * 9000 + 1000)} · Location: The Strand, WC2</div>
       <p class="r-text">Contacting Snowflake Cortex…</p><div class="r-foot"></div><div class="r-close">Press K to close</div></div>`;
     document.body.appendChild(this.overlay);
+    this.overlay.querySelector('.r-close').textContent = `Press ${closeKey} to close`;
 
     let text = null, log = null, source = '❄ Summarised live by Snowflake Cortex (AI_SUMMARIZE_AGG) from this match';
     try {

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { InputState, fillBotInput } from './input.js';
 import { createViewState, snapChase } from './chaseCam.js';
+import { createProtagonist, strideLength } from './protagonist.js';
 
 const WALK = 1.7;
 const JOG = 5.5;
@@ -18,6 +19,12 @@ const SLOT_COLOURS = [
   0xc8102e, 0x2a6fdb, 0xe8a317, 0x2e9b6a, 0x9b59b6, 0xe67e22, 0x1abc9c, 0xf1c40f,
 ];
 const SLOT_NAMES = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
+const AVATARS = [
+  {style:'man', skin:0xc7926b, trousers:0x3c4852, scale:1.02},
+  {style:'woman', skin:0xa76d4d, trousers:0x465461, scale:0.97},
+  {style:'man', skin:0xe5b69a, trousers:0x57534f, scale:0.99},
+  {style:'woman', skin:0x865b49, trousers:0x485350, scale:1.01},
+];
 
 let ctx = null;
 /** @type {ReturnType<typeof createPlayer>[]} active players (order = join order) */
@@ -59,7 +66,7 @@ export function createPlayer(slot, source, opts = {}) {
     radius: RADIUS,
     body: null,
     aW: null,
-    aS: null,
+    gait: { phase: 0, weight: 0, run: 0, heading: null, vx: 0, vz: 0 },
     paused: false,
     leaveArmed: false,
   };
@@ -135,7 +142,12 @@ export function updatePlayer(p, dt) {
   const k = 1 - Math.exp(-dt * EASE);
   p.vel.x = ctx.lerp(p.vel.x, mx * sp, k);
   p.vel.z = ctx.lerp(p.vel.z, mz * sp, k);
+  const xBefore = p.pos.x, zBefore = p.pos.z;
   ctx.moveWalk(p.pos, p.vel.x * dt, p.vel.z * dt);
+  if (dt > 0) {
+    p.gait.vx = (p.pos.x - xBefore) / dt;
+    p.gait.vz = (p.pos.z - zBefore) / dt;
+  }
 
   p.vy -= GRAVITY * dt;
   p.pos.y += p.vy * dt;
@@ -156,28 +168,33 @@ export function ensureBody(p) {
   if (!ctx || !ctx.pedGeo || !ctx.crowdMaterial || !ctx.scene) return;
   if (p.body) return p.body;
 
-  const geo = ctx.pedGeo();
-  const aW = new Float32Array(3);
-  const aS = new Float32Array(3);
-  aS[0] = 0.96;
-  aS[1] = 0.78;
-  aS[2] = 0.65;
-  aW[0] = 0;
-  aW[1] = Math.random() * 6.28;
-  geo.setAttribute('walk', new THREE.InstancedBufferAttribute(aW, 3));
-  geo.setAttribute('trousers', new THREE.InstancedBufferAttribute(new Float32Array([0.1, 0.12, 0.16]), 3));
-  geo.setAttribute('skin', new THREE.InstancedBufferAttribute(aS, 3));
+  const avatar = AVATARS[p.slot % AVATARS.length];
+  let mesh;
+  if (p.slot === 0) {
+    p.protagonist = createProtagonist(avatar, p.colour);
+    mesh = p.protagonist.root;
+    mesh.traverse(part => part.layers.set(1 + p.slot));
+  } else {
+    const geo = ctx.pedGeo(avatar.style);
+    const aW = new Float32Array([0, Math.random() * 6.28, 0]);
+    geo.setAttribute('walk', new THREE.InstancedBufferAttribute(aW, 3));
+    for (const name of ['trousers', 'skin']) {
+      geo.setAttribute(name, new THREE.InstancedBufferAttribute(new Float32Array(_c.setHex(avatar[name]).toArray()), 3));
+    }
 
-  const mesh = new THREE.InstancedMesh(geo, ctx.crowdMaterial, 1);
-  mesh.frustumCulled = false;
-  mesh.castShadow = true;
-  mesh.customDepthMaterial = ctx.crowdDepth;
-  mesh.receiveShadow = true;
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-  mesh.setColorAt(0, _c.setHex(p.colour));
-  mesh.instanceColor.needsUpdate = true;
-  mesh.layers.set(1 + p.slot);
-  mesh.count = 1;
+    mesh = new THREE.InstancedMesh(geo, ctx.crowdMaterial, 1);
+    mesh.name = `${p.name} detailed pedestrian`;
+    mesh.frustumCulled = false;
+    mesh.castShadow = true;
+    mesh.customDepthMaterial = ctx.crowdDepth;
+    mesh.receiveShadow = true;
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.setColorAt(0, _c.setHex(p.colour));
+    mesh.instanceColor.needsUpdate = true;
+    mesh.layers.set(1 + p.slot);
+    mesh.count = 1;
+    p.aW = aW;
+  }
   ctx.scene.add(mesh);
 
   // Name tag sprite on layer 9+slot
@@ -204,23 +221,37 @@ export function ensureBody(p) {
   }
 
   p.body = mesh;
-  p.aW = aW;
-  p.aS = aS;
   return mesh;
 }
 
-export function updateBody(p) {
+export function updateBody(p, dt = 0) {
   if (!p.body) return;
   const spd = Math.hypot(p.vel.x, p.vel.z);
   if (p.aW) {
     p.aW[0] = spd < 0.05 ? 0 : spd * 5.2;
     p.body.geometry.attributes.walk.needsUpdate = true;
   }
-  _q.setFromAxisAngle(UP, p.yaw + Math.PI);
-  _p.set(p.pos.x, p.pos.y, p.pos.z);
-  _m4.compose(_p, _q, _s);
-  p.body.setMatrixAt(0, _m4);
-  p.body.instanceMatrix.needsUpdate = true;
+  if (p.protagonist) {
+    const gait = p.gait;
+    const speed = p.paused ? 0 : Math.hypot(gait.vx, gait.vz);
+    const response = 1 - Math.exp(-dt * 10);
+    gait.weight = ctx.lerp(gait.weight, Math.min(1, speed / 1.35), response);
+    gait.run = ctx.lerp(gait.run, ctx.clamp((speed - 2) / 3.5, 0, 1), response);
+    const backwards = p.input.moveY < -0.4 && Math.abs(p.input.moveX) < 0.4;
+    const target = speed > 0.15 && !backwards ? Math.atan2(gait.vx, gait.vz) : p.yaw + Math.PI;
+    const difference = target - (gait.heading ?? target);
+    gait.heading = (gait.heading ?? target) + Math.atan2(Math.sin(difference), Math.cos(difference)) * (1 - Math.exp(-dt * 12));
+    if (p.grounded) gait.phase = (gait.phase + (backwards ? -1 : 1) * speed * dt / strideLength(gait.run)) % 1;
+    p.body.position.copy(p.pos);
+    p.body.rotation.y = gait.heading;
+    p.protagonist.animate(gait.phase, gait.weight, gait.run, !p.grounded, p.vy);
+  } else {
+    _q.setFromAxisAngle(UP, p.yaw + Math.PI);
+    _p.set(p.pos.x, p.pos.y, p.pos.z);
+    _m4.compose(_p, _q, _s.setScalar(AVATARS[p.slot % AVATARS.length].scale));
+    p.body.setMatrixAt(0, _m4);
+    p.body.instanceMatrix.needsUpdate = true;
+  }
   const fp = p.view && p.view.firstPerson;
   p.body.visible = !fp;
   if (p.tag) {
@@ -302,10 +333,17 @@ export function removePlayer(id) {
   const p = players[i];
   if (p.body) {
     ctx.scene.remove(p.body);
+    if (p.protagonist) p.protagonist.dispose();
+    else {
+      p.body.geometry.dispose();
+      p.body.dispose();
+    }
     p.body = null;
   }
   if (p.tag) {
     ctx.scene.remove(p.tag);
+    p.tag.material.map.dispose();
+    p.tag.material.dispose();
     p.tag = null;
   }
   slotTaken[p.slot] = false;
@@ -350,7 +388,7 @@ export function pollAndUpdateAll(dt, { blockedAt, botCtx }) {
     }
     updatePlayer(p, dt);
     if (p.input && p.input.leaveHeld) leaveIds.push(p.id);
-    else updateBody(p);
+    else updateBody(p, dt);
   }
   for (const id of leaveIds) removePlayer(id);
   if (players.length) separatePlayers(blockedAt);

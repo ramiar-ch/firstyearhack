@@ -15,16 +15,19 @@ const compass = (deg) => DIRS[Math.round((((deg % 360) + 360) % 360) / 45) % 8];
 function pagerText(text) {
   return 'PG: ' + text.toUpperCase()
     .replace(/NORTH-WEST/g, 'NW').replace(/NORTH-EAST/g, 'NE').replace(/SOUTH-WEST/g, 'SW').replace(/SOUTH-EAST/g, 'SE')
-    .replace(/NORTH/g, 'N').replace(/SOUTH/g, 'S').replace(/EAST/g, 'E').replace(/WEST/g, 'W')
+    .replace(/\bNORTH\b/g, 'N').replace(/\bSOUTH\b/g, 'S').replace(/\bEAST\b/g, 'E').replace(/\bWEST\b/g, 'W')
     .replace(/ METRES/g, 'M').replace(/ABOUT /g, '').replace(/HOUSE/g, 'HSE').replace(/ STATION/g, ' STN')
     .replace(/[.,!]/g, '').replace(/ THE /g, ' ');
 }
 
 export class Dispatch {
   /** toLatLon(x, z) turns game metres into { lat, lon }. */
-  constructor(toLatLon) {
+  constructor(toLatLon, sendToPhones) {
     this.isRetro = () => false; // set by the game: true in 1997 (pager mode)
+    this.isPaused = () => false;
+    this.pending = null;
     this.toLatLon = toLatLon;
+    this.sendToPhones = sendToPhones;
     this.box = document.createElement('div');
     this.box.id = 'dispatch';
     this.box.innerHTML = '<div class="d-head"></div><div class="d-text"></div>';
@@ -57,12 +60,13 @@ export class Dispatch {
     const dir = compass(route.bearing), m = Math.max(10, Math.round(route.metres / 10) * 10);
     const text =
       stage === 'pickup' ? `Head ${dir}, about ${m} metres, to ${place.name}. Pick up ${item}.`
-      : stage === 'escape' ? `The Met is onto you! The red phone box is ${dir}, ${m} metres away. Press E inside it. Or throw your weapon to block them.`
+      : stage === 'escape' ? `The Met is onto you! Use the red phone box ${m} metres ${dir}, or block their route.`
       : `Now deliver to ${place.name}: head ${dir}, about ${m} metres. No rush.`;
     this.show(text, viaSnowflake);
   }
 
   show(text, viaSnowflake) {
+    if (this.isPaused()) { this.pending = { text, viaSnowflake }; return; }
     // 1997: no GPS, no voice assistant - you get a PAGER message instead.
     const pager = this.isRetro();
     if (pager) text = pagerText(text);
@@ -82,6 +86,13 @@ export class Dispatch {
       speechSynthesis.speak(u);
     } catch { /* no speech */ }
     // And big on the phone controller.
-    fetch('/api/phone-message', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, pager }) }).catch(() => {});
+    this.sendToPhones(text, pager);
+  }
+
+  resume() {
+    if (!this.pending) return;
+    const { text, viaSnowflake } = this.pending;
+    this.pending = null;
+    this.show(text, viaSnowflake);
   }
 }

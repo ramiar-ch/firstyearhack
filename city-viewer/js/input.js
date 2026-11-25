@@ -1,4 +1,5 @@
 /** Per-player input: keyboard fallback, gamepads, and debug bots. */
+import { defaultBindings, translateKey } from './keybindings.js';
 
 const DEAD = 0.15;
 
@@ -44,28 +45,34 @@ export class KeyboardMouseSource {
     this.kind = 'keyboard';
     this.lookSens = 1;
     this.invertY = false;
+    this.bindings = defaultBindings();
   }
 
-  bind(domElement, getMode) {
+  bind(domElement, getMode, isPaused = () => false) {
     if (this._bound) return;
     this._bound = true;
     this.getMode = getMode;
     this.el = domElement;
 
     addEventListener('keydown', (e) => {
-      this.keys[e.code] = true;
-      if (e.code === 'Space') {
+      if (isPaused() || e.target?.closest?.('button,input,select,textarea,a')) return;
+      const code = translateKey(e.code, this.bindings);
+      if (!code) return;
+      this.keys[code] = true;
+      if (code === 'Space') {
         e.preventDefault();
         if (this.getMode() === 'walk' && !e.repeat) this.jumpSeq++;
       }
-      if (e.code === 'KeyV' && this.getMode() === 'walk' && !e.repeat) this.toggleViewSeq++;
+      if (code === 'KeyV' && this.getMode() === 'walk' && !e.repeat) this.toggleViewSeq++;
       if (e.code.startsWith('Arrow')) e.preventDefault();
     });
     addEventListener('keyup', (e) => {
-      this.keys[e.code] = false;
+      const code = translateKey(e.code, this.bindings);
+      if (code) this.keys[code] = false;
     });
     addEventListener('blur', () => this.reset());
     this.el.addEventListener('mousedown', () => {
+      if (isPaused()) return;
       const m = this.getMode();
       if (m === 'walk' || m === 'fly') {
         this.dragging = true;
@@ -81,6 +88,7 @@ export class KeyboardMouseSource {
       this.dragging = false;
     });
     addEventListener('mousemove', (e) => {
+      if (isPaused()) return;
       const m = this.getMode();
       if (m !== 'walk' && m !== 'fly') return;
       if (document.pointerLockElement === this.el || this.dragging) {

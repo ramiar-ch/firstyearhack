@@ -2,10 +2,20 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const relay = require('./relay.js'); // game addition: phone controller messages (/api/...)
 
 const root = __dirname;
 const port = Number(process.env.PORT) || 8080;
+const openBrowser = process.argv.includes('--open');
+function openGame() {
+  const url = `http://localhost:${port}`;
+  const command = process.platform === 'win32' ? 'cmd.exe' : process.platform === 'darwin' ? 'open' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  spawn(command, args, { windowsHide: true, stdio: 'ignore' }).on('error', () => {
+    console.log(`Open ${url} in your browser.`);
+  });
+}
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -38,4 +48,10 @@ http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
     res.end(data);
   });
-}).listen(port, () => console.log(`Strand City Viewer: http://localhost:${port}`));
+}).on('error', err => {
+  console.error(err.code === 'EADDRINUSE' ? `Port ${port} is already in use. If the game is running, open http://localhost:${port}.` : err.message);
+  process.exitCode = 1;
+}).listen(port, () => {
+  console.log(`Strand City Viewer: http://localhost:${port}`);
+  if (openBrowser) openGame();
+});

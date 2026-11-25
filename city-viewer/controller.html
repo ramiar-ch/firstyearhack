@@ -117,14 +117,30 @@ document.getElementById('hapticNote').textContent = canVibrate ? 'Haptic feedbac
 
 // ---- Current controls ----
 const state = { throttle: 0, brake: 0, steer: 0, handbrake: false };
+const pairing = new URLSearchParams(location.search);
+const player = Number(pairing.get('player'));
+const room = pairing.get('room') || '';
+const client = Array.from(crypto.getRandomValues(new Uint8Array(12)), n => n.toString(16).padStart(2, '0')).join('');
+const identity = { room, player, client };
+let connected = false;
 let lastSent = '';
+function send(path, data) {
+  return fetch('/api/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...identity, ...data }) });
+}
 function sendInput(extra) {
+  if (!connected) return;
   const msg = JSON.stringify(extra ? { ...state, ...extra } : state);
   if (!extra && msg === lastSent) return; // nothing changed
   lastSent = msg;
-  fetch('/api/input', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: msg }).catch(() => {});
+  send('input', extra ? { ...state, ...extra } : state).catch(() => {});
 }
-setInterval(() => { lastSent = ''; sendInput(); }, 250); // heartbeat so the game knows we're still here
+let heartbeat;
+function clearControls() {
+  Object.assign(state, { throttle: 0, brake: 0, steer: 0, handbrake: false });
+  document.querySelectorAll('.btn.down').forEach(button => button.classList.remove('down'));
+  release();
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearControls(); });
 
 // ---- Buttons (pointer events = works with several fingers at once) ----
 function holdButton(id, onChange) {
@@ -138,6 +154,7 @@ holdButton('gas', (d) => { state.throttle = d ? 1 : 0; });
 holdButton('brake', (d) => { state.brake = d ? 1 : 0; });
 holdButton('hand', (d) => { state.handbrake = d; });
 const act = document.getElementById('act');
+if (player === 2) act.textContent = 'PHONE BOX';
 act.addEventListener('pointerdown', () => { act.classList.add('down'); buzz(20); sendInput({ action: Date.now() }); });
 act.addEventListener('pointerup', () => act.classList.remove('down'));
 const thr = document.getElementById('throw');
@@ -162,14 +179,32 @@ pad.addEventListener('pointercancel', release);
 
 // ---- Messages from the game: vibrate on crashes, missions, police, warp ----
 const status = document.getElementById('status');
-const events = new EventSource('/api/events?role=phone');
-events.onopen = () => { status.textContent = 'connected ✓'; };
-events.onerror = () => { status.textContent = 'reconnecting…'; };
-events.addEventListener('haptic', (e) => { const d = JSON.parse(e.data); buzz(d.pattern); });
+const validPairing = /^[a-f0-9]{24}$/.test(room) && (player === 1 || player === 2);
+const events = validPairing ? new EventSource('/api/events?' + new URLSearchParams({ role: 'phone', ...identity })) : null;
+if (events) {
+  status.textContent = `P${player} · connecting…`;
+  events.addEventListener('paired', () => {
+    connected = true;
+    clearControls();
+    status.textContent = `P${player} · connected ✓`;
+    clearInterval(heartbeat);
+    heartbeat = setInterval(() => { lastSent = ''; sendInput(); }, 250);
+  });
+  function unpair(message) {
+    connected = false;
+    clearInterval(heartbeat);
+    clearControls();
+    status.textContent = message;
+  }
+  events.onerror = () => unpair(`P${player} · reconnecting…`);
+  events.addEventListener('slot-busy', () => { events.close(); unpair(`P${player} is in use. Scan the other code.`); });
+  events.addEventListener('session-closed', () => { events.close(); unpair('Game ended. Scan a new code to reconnect.'); });
+  events.addEventListener('haptic', e => buzz(JSON.parse(e.data).pattern));
+} else status.textContent = 'Scan the P1 or P2 QR code in game settings.';
 // Snowflake Dispatch instructions shown big on the phone (where to go next).
 const msg = document.getElementById('msg');
 let msgTimer;
-events.addEventListener('message', (e) => {
+events?.addEventListener('message', (e) => {
   const d = JSON.parse(e.data);
   msg.textContent = d.text;
   document.body.classList.toggle('pager', !!d.pager); // 1997: the controller turns into a pager
@@ -215,8 +250,9 @@ document.getElementById('preview-equip').addEventListener('click', async () => {
   preview.style.display = 'none';
   status.textContent = 'sending weapon…';
   try {
-    await fetch('/api/scan', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: pending.toDataURL('image/png'), cut: true }) });
+    if (!connected) throw new Error('Not paired');
+    const response = await send('scan', { image: pending.toDataURL('image/png'), cut: true });
+    if (!response.ok) throw new Error('Scan was rejected');
     status.textContent = 'weapon equipped ✓';
     buzz([40, 60, 40, 60, 120]);
   } catch {

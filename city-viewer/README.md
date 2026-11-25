@@ -1,12 +1,22 @@
 # City viewer — 2 km around KCL Strand
 
-A standalone 3D model of the real streets within 2 km of King's College London's Strand campus, built with Three.js. You can orbit, walk the streets at eye level, fly, or take over a vehicle, including bicycles. The viewer runs without a build step.
+A browser game and 3D sightseeing viewer covering the real streets within 2 km of King's College London's Strand campus. Both use the same Three.js city and run without a build step.
 
 ## Run it
 
 Run `npm start` from the repository root and open <http://localhost:8080>.
 
-It needs an internet connection the first time to load Three.js from the jsDelivr CDN. The UI is in English by default; the **中文** button in the top bar switches to Chinese (remembered per browser).
+On Windows, double-click `start-game.cmd` in the repository root to start the server and open the game automatically. Keep its console window open while playing. Opening `index.html` directly with a `file://` address cannot run the game's ES modules; that page shows launcher instructions instead of a loading bar.
+
+The opening cover stays visible while the shared map loads. Once it is ready, the main menu offers **Street Missions** and **Sightseeing**. Choosing a mode starts its population and player systems using the already loaded map. Street Missions opens at the Strand car and includes deliveries, police pursuits, time travel and local split screen. Sightseeing opens in Orbit mode and includes Walk, Fly and traffic driving, including bicycles.
+
+Press **Esc** or click **Menu** to pause. The pause menu offers Resume, Settings, Main menu and Exit game. Settings contains the shortcuts, language, time and display controls. Sightseeing also has Places and View controls there. Exit stops the current session and shows the exit screen in a normal browser tab.
+
+**Shortcuts:** in Esc → Settings → Shortcuts, click a binding and press its replacement. Conflicts are rejected, Esc cancels capture, and Reset shortcuts restores defaults. Bindings apply to movement, gameplay actions and P2, and persist in this browser. Esc always opens the pause menu.
+
+**Main menu and saves:** returning to the main menu pauses the existing world and keeps phone pairing alive. Choosing the same mode resumes immediately without loading the map again. Choosing the other mode reloads the world and restores that mode's save if present. Esc offers Save game and Load saved game; the launcher also offers dated load buttons. Returning to the main menu and exiting save automatically. Each mode has its own local save containing position, view, vehicle, time, mission stage/timer, earnings, wanted level, era and two-car state. Loading a save skips the opening sequence. Ambient traffic and temporary scanned props are regenerated rather than saved. Saves belong to this browser and origin (use the same localhost address and port); clearing site data removes them.
+
+The first visit needs internet access for Three.js and the QR code library on jsDelivr. Menus default to English on each visit. The **中文** button in the launcher and Settings switches the language for the current visit, and `?lang=zh` explicitly opens in Chinese.
 
 ## Controls
 
@@ -16,23 +26,30 @@ It needs an internet connection the first time to load Three.js from the jsDeliv
 | 2 | Walk | click to lock the mouse · WASD walk · Shift jog · Space jump |
 | 3 | Fly | WASD move · Space/E up · C/Q down · Shift faster · wheel speed |
 | 4 | Drive or ride the nearest available vehicle | W/S accelerate/brake (hold S to back up) · A/D steer · Space brake · V change vehicle · C chase/first-person camera · R back on the road |
-| 5 | Strand car | WASD/arrows drive · Space handbrake · V chase/overhead · E exit or re-enter on foot |
+| 5 | Street vehicle | Enter the selected nearby vehicle · WASD/arrows drive · Space handbrake · V chase/overhead |
+| F | Street vehicle interaction | Get out, or enter the selected accessible vehicle within 6 m of its body |
+| G / H or mouse wheel | Street vehicle selection | Previous / next nearby vehicle while on foot |
+| J | Street item | Use the equipped item (P1) |
 
-After the loading artwork and 1997 boot sequence, the opening swoop ends at the orange Strand car. Press a key to skip the swoop or open `?skipIntro=1`. In Walk mode, V changes between first and third person. Press A on a controller or select **Add bot** for up to four walking views. Traffic driving uses one view. Press G to toggle two-car split screen in the Strand cars. P1 uses WASD and P2 uses the arrow keys with Right Ctrl for the handbrake. Switching to another mode ends the two-car session.
+In single-viewport driving, hold the left mouse button and drag to look around. Hold the forward key (W by default) to steer toward the view. The camera centers on the vehicle heading after about 1.25 seconds of mouse inactivity. A/D overrides the steering assistance.
 
-Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. A hard crash in either Strand car adds a wanted star. Up to three patrol cars chase the drivers along the streets. Escape at the red phone box with E (Enter for P2), or press R in Strand car or Walk mode. Pickups, deliveries and police pursuits automatically activate 1997 mode. The normal view returns when both the job and the chase are over.
+In Street Missions, the 1997 boot and opening swoop end at the orange Strand car. Press a key to skip the intro or open `?skipIntro=1`. Press B or use the split-screen toggle in Settings for two cars. P1 uses WASD, and P2 uses the arrow keys with Right Ctrl for the handbrake. Entering Walk ends the two-car session. In Sightseeing Walk, V switches between first and third person. Press A on a gamepad or select **Add bot** under Settings for up to four walking views.
 
-Press P to show the phone controller QR code. Connect the phone to the same Wi-Fi and scan it to steer, brake and receive haptic feedback on supported devices. Connecting a phone starts two-car mode and assigns the phone to P2. The scanner on the controller turns a photo into an item the player carries. Press F for P1, / for P2, or Throw on the phone to drop a giant roadblock.
+While walking in Street Missions, nearby cars, taxis, vans, buses and bicycles appear in a small bubble beside the character. The range is 6 m from the vehicle's body; vehicles behind walls or outside the playable area are excluded. G/H and the mouse wheel choose a candidate, and F enters it. The range is checked again on entry, so moving traffic cannot be selected from far away. F gets out into a clear space beside the vehicle. Previously used vehicles stay parked and can be entered again. The selected model, paint and parked vehicles are included in the Street save. These desktop shortcuts remain editable in Settings; phone controls are unchanged.
 
-The first mission is the Exam Paper Heist. Collect the papers at Bush House, lose the patrol, and deliver them to Somerset House. Dispatch gives spoken directions at each stage. Open `?demo=1` to show the controller QR code after the intro. Press K for a spoken incident report. To enable live Snowflake reports, copy `city-viewer/.env.example` to `city-viewer/.env` and fill in your Snowflake settings. The report has a local fallback.
+Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. Up to three patrol cars chase the drivers along the streets. Use the red phone box with E (Enter for P2), or press R in the Strand car or on foot, to travel between 2026 and 1997.
 
-T runs/pauses time, H hides the UI, and clicking the minimap moves you there.
+In Street Missions, open **Esc → Settings → Phone controllers**, or press **P**. Put both phones on the same Wi-Fi as the computer. Scan the **P1** code on one phone and the **P2** code on the other. Each phone controls its own car, and connecting P2 enables split screen. The controller's scanner and in-game feedback follow the paired player. Returning to the launcher keeps pairing alive; switching mode or exiting ends both connections.
+
+The first mission is the Exam Paper Heist. Collect the papers at Bush House, lose the patrol, and deliver them to Somerset House. Dispatch gives spoken directions at each stage. Open `?demo=1` to show phone settings after the intro. Press K for a spoken incident report. The report can use Snowflake when configured and has a local fallback.
+
+T runs/pauses time, U hides the UI, and clicking the minimap moves you there.
 
 Teal dots on the minimap mark shared bicycle stations. Select a station in Orbit or Walk mode, then enter Drive near an available bicycle to ride it. Switch back to Walk to dismount. A shared bicycle docks in a free slot when you dismount within about three metres of one.
 
 **Look:** the default "London mood" is a low overcast sky, silver haze, soft shadows, rain-wet roads and pavements with puddles that reflect the sky, light drizzle (toggle "Drizzle"), and a muted cool colour grade that keeps reds (buses, phone boxes, post boxes) vivid. At night the clouds glow sodium-brown and shopfronts light up. Switch to "Natural" in the Display panel for a physical sky.
 
-**URL options:** `?time=21.5` (start time, 0–24), `?look=natural|london`, `?lang=zh|en`, `?mode=walk|fly|drive`, `?car=cab|car|routemaster|van|bus|bike`, `?at=51.5113,-0.1198` (start at a lat/lon) — e.g. `index.html?mode=drive&car=bike&time=18`.
+You can use `?play=street` or `?play=sightseeing` to bypass the main menu. Sightseeing accepts `?mode=walk|fly|drive`, `?car=cab|car|routemaster|van|bus|bike`, and `?at=51.5113,-0.1198`. Both modes accept `?time=21.5`, `?look=natural|london` and `?lang=zh|en`.
 
 ## What is real and what is generated
 
@@ -45,7 +62,7 @@ The Places menu frames the detailed landmark models. Elizabeth Tower's four dial
 
 Building walls (from the OSM footprints), Thames embankments, bridge parapets and railway viaduct walls are stored as line segments. Trees, posts, docks, street furniture and viaduct piers use circles. Walking, driving and cycling use the same collision world. Each car, bus and bicycle has a footprint that turns with it. The player and AI traffic check the full motion to the next position against those footprints and static obstacles. Traffic follows the road network on the left and yields to red lights and occupied space.
 
-Run the collision regression tests with `node --test tools/test-traffic.js` from `city-viewer`.
+Run the collision, phone pairing, save, shortcut and nearby vehicle regression tests with `node --test tools/test-traffic.js tools/test-relay.js tools/test-save-controls.js tools/test-nearby-vehicles.js` from `city-viewer`.
 
 A racing or game mod can use the world through `window.CityWorld`. It is available after the page fires the `cityworld-ready` event. Coordinates are metres, with x pointing east and z pointing south from the Strand campus.
 

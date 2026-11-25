@@ -10,14 +10,13 @@ import * as THREE from 'three';
 export class TimeWarp {
   /**
    * x, z: where the phone box stands.
-   * setPixelRatio(r): makes the renderer draw at a lower/higher resolution.
-   * onRetroChange(isRetro): lets the game switch camera etc.
+   * onRetroChange(isRetro) updates the cameras and renderer.
    */
-  constructor(scene, x, z, { setPixelRatio, getPixelRatio, onRetroChange }) {
-    this.setPixelRatio = setPixelRatio;
-    this.getPixelRatio = getPixelRatio;
+  constructor(scene, x, z, { onRetroChange }) {
     this.onRetroChange = onRetroChange;
     this.retro = false;
+    this.pendingRetro = null;
+    this.paused = false;
     this.wanted = null;
     this.position = new THREE.Vector3(x, 0, z);
     this.box = buildPhoneBox();
@@ -50,10 +49,11 @@ export class TimeWarp {
 
   /** Phone box: travel 2026 <-> 1997 (flash). Going to 1997 mid-chase = the police lose you. */
   escape() {
+    if (this.pendingRetro || this.paused) return;
     const toPast = !this.retro;
     this.onEvent('warp');
     this.flashScreen();
-    setTimeout(() => this.setRetro(toPast), 200); // swap while the screen is white
+    this.pendingRetro = { toPast, remaining: 0.2 }; // swap while the screen is white
     if (toPast && this.wanted) { this.clearWanted(); this.onLost(); }
   }
 
@@ -73,17 +73,21 @@ export class TimeWarp {
     if (this.retro === on) return;
     this.retro = on;
     document.body.classList.toggle('retro', on);
-    if (on) {
-      // Draw at ~320 pixels wide, then the browser blows it up with sharp pixels.
-      this.normalRatio = this.getPixelRatio();
-      this.setPixelRatio(320 / innerWidth);
-    } else {
-      this.setPixelRatio(this.normalRatio ?? 1);
-    }
     this.onRetroChange(on);
   }
 
-  update() {
+  setPaused(paused) {
+    this.paused = paused;
+    if (paused) this.stopSiren();
+    else if (this.wanted && !this.siren) this.startSiren();
+  }
+
+  update(dt) {
+    if (this.pendingRetro && (this.pendingRetro.remaining -= dt) <= 0) {
+      const {toPast} = this.pendingRetro;
+      this.pendingRetro = null;
+      this.setRetro(toPast);
+    }
     // (1997 is now a place you CHOOSE to go to - see escape() - not automatic.)
     // Phone box beam pulses, brighter while the police are after you.
     const beam = this.box.userData.beam;
@@ -92,6 +96,7 @@ export class TimeWarp {
 
   // ---- A simple two-tone siren with Web Audio (no sound files needed) ----
   startSiren() {
+    if (this.paused) return;
     try {
       const ctx = new AudioContext();
       const osc = ctx.createOscillator();

@@ -28,26 +28,30 @@ const DRIFT_GRIP = 1.6; // ...while handbraking (low = long slides)
 const HANDBRAKE_TURN = 0.7; // extra turning on the handbrake
 
 // Real car size (metres): the viewer is life-size.
-const LENGTH = 4.4;
-const WIDTH = 1.9;
+const LENGTH = 4.55;
+const WIDTH = 2.25;
 
 export class DrivableCar {
   /**
    * x, z: where to park it. heading: radians (0 = pointing north / -z).
    * blockedAt(x, z): returns true if that ground point is a wall/water.
    */
-  constructor(x, z, heading, blockedAt, colour = 0xff7a1a) {
+  constructor(x, z, heading, blockedAt, model) {
     this.blockedAt = blockedAt;
     this.velocity = new THREE.Vector3();
-    this.mesh = buildCarMesh(colour);
+    this.mesh = model;
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.y = heading;
     this.braking = false;
-    this.wheelSpin = 0;
+    this.travel = 0;
   }
 
   get position() { return this.mesh.position; }
   get heading() { return this.mesh.rotation.y; }
+  get kind() { return this.mesh.userData.kind || 'car'; }
+  get spec() { return this.mesh.userData.spec || {}; }
+  get length() { return this.spec.length || LENGTH; }
+  get width() { return this.spec.width || WIDTH; }
 
   /** Unit vector the car points along. */
   forward() {
@@ -64,14 +68,14 @@ export class DrivableCar {
    * input = { throttle: 0..1, brake: 0..1, steer: -1 (right) .. 1 (left), handbrake: bool }
    * Returns true if we crashed into something hard this frame.
    */
-  update(dt, input) {
+  update(dt, input, others = []) {
     const fwd = this.forward();
     const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
     let speed = this.velocity.dot(fwd); // forward part of the velocity
     let slide = this.velocity.dot(right); // sideways part
 
     // ---- Speed: throttle, brake/reverse, handbrake, drag ----
-    speed += ACCELERATION * input.throttle * dt;
+    speed += (this.spec.acc || ACCELERATION) * input.throttle * dt;
     if (input.brake > 0) speed -= (speed > 0.5 ? BRAKE : REVERSE_ACCEL) * input.brake * dt;
     if (input.handbrake) speed -= speed * 0.8 * dt;
     speed -= speed * DRAG * dt * (Math.abs(speed) / MAX_SPEED);
@@ -79,7 +83,7 @@ export class DrivableCar {
       const slow = ROLLING * dt;
       speed = Math.abs(speed) < slow ? 0 : speed - Math.sign(speed) * slow;
     }
-    speed = Math.max(-MAX_REVERSE, Math.min(MAX_SPEED, speed));
+    speed = Math.max(-(this.spec.rev || MAX_REVERSE), Math.min(this.spec.max || MAX_SPEED, speed));
 
     // ---- Grip: shrink the sideways slide (much less on the handbrake) ----
     slide *= Math.exp(-(input.handbrake ? DRIFT_GRIP : GRIP) * dt);
@@ -95,13 +99,14 @@ export class DrivableCar {
     this.velocity.copy(fwd).multiplyScalar(speed).addScaledVector(right, slide);
 
     // ---- Move + collide ----
-    const crashed = this.moveWithCollisions(dt, headingBefore);
+    const beforeX = this.position.x, beforeZ = this.position.z;
+    const crashed = this.moveWithCollisions(dt, headingBefore, others);
 
     // ---- Looks: spin the wheels, glow the brake lights ----
-    this.wheelSpin += (this.speed * dt) / 0.33; // wheel radius 0.33 m
-    for (const w of this.mesh.userData.wheels) w.rotation.x = -this.wheelSpin;
+    this.travel += (this.position.x-beforeX)*fwd.x + (this.position.z-beforeZ)*fwd.z;
+    this.mesh.userData.animate(this.travel, input.steer * 0.38);
     this.braking = input.brake > 0 && this.speed > 0.5;
-    this.mesh.userData.tailMat.emissiveIntensity = this.braking || input.handbrake ? 4 : 1.2;
+    if (this.mesh.userData.tailMat) this.mesh.userData.tailMat.emissiveIntensity = this.braking || input.handbrake ? 4 : 1.2;
     return crashed;
   }
 
@@ -109,7 +114,8 @@ export class DrivableCar {
   hits(x, z, heading) {
     const fx = -Math.sin(heading), fz = -Math.cos(heading); // forward
     const rx = -fz, rz = fx; // right
-    const hl = LENGTH / 2 - 0.15, hw = WIDTH / 2 - 0.1;
+    if (this.blockedBox?.(this.footprint(x,z,heading))) return true;
+    const hl = this.length / 2 - 0.15, hw = this.width / 2 - 0.1;
     // Test the 4 corners plus the middle of the front and back bumpers.
     for (const [f, r] of [[hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw], [hl, 0], [-hl, 0], [0, hw], [0, -hw]]) {
       if (this.blockedAt(x + fx * f + rx * r, z + fz * f + rz * r)) return true;
@@ -117,81 +123,39 @@ export class DrivableCar {
     return false;
   }
 
-  moveWithCollisions(dt, headingBefore) {
+  footprint(x=this.position.x, z=this.position.z, yaw=this.heading, padding=0) {
+    return CityTraffic.footprint(x, z, yaw, this.width + padding, this.length + padding);
+  }
+
+  moveWithCollisions(dt, headingBefore, others) {
     const p = this.position;
     const dx = this.velocity.x * dt, dz = this.velocity.z * dt;
-    const h = this.heading;
-    if (!this.hits(p.x + dx, p.z + dz, h)) { p.x += dx; p.z += dz; return false; }
+    const blocked = ({x,z,yaw}) => this.hits(x,z,yaw) || others.some(other =>
+      CityTraffic.vehicleOverlap(this.footprint(x,z,yaw),other.footprint()));
+    const start = {x:p.x,z:p.z,yaw:headingBefore};
+    const radius = Math.hypot(this.length,this.width)/2;
+    const result = CityTraffic.sweep(start, dx, dz, this.heading-headingBefore, radius, blocked);
+    this.mesh.rotation.y = result.pose.yaw;
+    p.x = result.pose.x;
+    p.z = result.pose.z;
+    if (!result.hit) return false;
 
-    // Blocked: try sliding along the wall in just x or just z.
     const impact = this.velocity.length();
-    if (!this.hits(p.x + dx, p.z, h)) {
-      const crashed = Math.abs(this.velocity.z) > 5;
-      p.x += dx;
-      this.velocity.z *= -0.2;
+    const restX = dx-(p.x-start.x), restZ = dz-(p.z-start.z);
+    for (const [x,z] of [[restX,0],[0,restZ]]) {
+      if (Math.abs(x)+Math.abs(z)<0.001) continue;
+      const slide = CityTraffic.sweep(result.pose,x,z,0,radius,blocked);
+      if (slide.hit) continue;
+      p.x = slide.pose.x;
+      p.z = slide.pose.z;
+      if (x) this.velocity.z *= -0.2;
+      else this.velocity.x *= -0.2;
       this.velocity.multiplyScalar(0.97);
-      return crashed;
-    }
-    if (!this.hits(p.x, p.z + dz, h)) {
-      const crashed = Math.abs(this.velocity.x) > 5;
-      p.z += dz;
-      this.velocity.x *= -0.2;
-      this.velocity.multiplyScalar(0.97);
-      return crashed;
+      return impact > 5;
     }
 
     // Head-on: stop and bounce back a little.
     this.velocity.multiplyScalar(-0.25);
-    // If turning pushed a corner INTO the wall, undo the turn too.
-    if (this.hits(p.x, p.z, h)) this.mesh.rotation.y = headingBefore;
     return impact > 5; // a proper crash, not a gentle nudge
   }
-}
-
-// ---- The car's 3D model: boxes + cylinders (original design) ---------------
-export function buildCarMesh(colour) {
-  const car = new THREE.Group();
-  const paint = new THREE.MeshStandardMaterial({ color: colour, roughness: 0.35, metalness: 0.5 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x15171c, roughness: 0.6 });
-  const glass = new THREE.MeshStandardMaterial({ color: 0x1b2433, roughness: 0.1, metalness: 0.8 });
-  const chrome = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, roughness: 0.25, metalness: 0.9 });
-  const add = (geo, mat, x, y, z) => {
-    const m = new THREE.Mesh(geo, mat);
-    m.position.set(x, y, z);
-    m.castShadow = true;
-    car.add(m);
-    return m;
-  };
-
-  // Body, a slightly narrower cabin with glass, and a roof.
-  add(new THREE.BoxGeometry(WIDTH, 0.62, LENGTH), paint, 0, 0.62, 0);
-  add(new THREE.BoxGeometry(WIDTH - 0.16, 0.5, 2.3), glass, 0, 1.18, 0.25);
-  add(new THREE.BoxGeometry(WIDTH - 0.2, 0.08, 2.1), paint, 0, 1.47, 0.3);
-  // Bumpers.
-  add(new THREE.BoxGeometry(WIDTH + 0.04, 0.22, 0.18), dark, 0, 0.42, -LENGTH / 2);
-  add(new THREE.BoxGeometry(WIDTH + 0.04, 0.22, 0.18), dark, 0, 0.42, LENGTH / 2);
-
-  // Wheels (cylinders turned on their side) - they spin while driving.
-  const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 0.24, 14).rotateZ(Math.PI / 2);
-  const hubGeo = new THREE.CylinderGeometry(0.16, 0.16, 0.26, 10).rotateZ(Math.PI / 2);
-  const wheels = [];
-  for (const [x, z] of [[-0.88, -1.35], [0.88, -1.35], [-0.88, 1.35], [0.88, 1.35]]) {
-    const w = new THREE.Group();
-    w.position.set(x, 0.33, z);
-    w.add(new THREE.Mesh(wheelGeo, dark), new THREE.Mesh(hubGeo, chrome));
-    car.add(w);
-    wheels.push(w);
-  }
-
-  // Lights. Emissive = they glow (and bloom at night).
-  const headMat = new THREE.MeshStandardMaterial({ color: 0xfff4d6, emissive: 0xfff1c4, emissiveIntensity: 2.5 });
-  const tailMat = new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff1a0a, emissiveIntensity: 1.2 });
-  for (const side of [-1, 1]) {
-    add(new THREE.BoxGeometry(0.42, 0.16, 0.06), headMat, side * 0.62, 0.74, -LENGTH / 2 - 0.01);
-    add(new THREE.BoxGeometry(0.42, 0.14, 0.06), tailMat, side * 0.62, 0.76, LENGTH / 2 + 0.01);
-  }
-
-  car.userData.wheels = wheels;
-  car.userData.tailMat = tailMat;
-  return car;
 }

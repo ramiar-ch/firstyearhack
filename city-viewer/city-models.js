@@ -156,7 +156,7 @@ function createCityModels(THREE, mergeGeometries, time) {
     return batch.finish();
   }
 
-  function passengerBody(b, kind, axles, radius) {
+  function passengerBody(b, kind, axles, radius, rearLights) {
     const cab = kind === 'cab';
     const van = kind === 'van';
     const end = van ? 2.65 : cab ? 2.3 : 2.2;
@@ -192,7 +192,7 @@ function createCityModels(THREE, mergeGeometries, time) {
         box(b.lights, [0.30, 0.077, 0.045], [x, top - 0.34, end + 0.02], 0xeaf4ff, side * 0.13);
       }
       box(b.trim, [0.24, 0.18, 0.055], [x, top - 0.31, -end], black);
-      box(b.lights, [0.20, 0.083, 0.042], [x, top - 0.30, -end - 0.033], 0xe3262c);
+      box(rearLights, [0.20, 0.083, 0.042], [x, top - 0.30, -end - 0.033], 0xe3262c);
       box(b.trim, [0.20, 0.032, 0.045], [x, top - 0.37, -end - 0.03], 0xc98230);
     }
     box(b.trim, [cab ? 0.59 : 0.65, cab ? 0.28 : 0.15, 0.032], [0, top - 0.39, end + 0.01], black);
@@ -279,7 +279,7 @@ function createCityModels(THREE, mergeGeometries, time) {
     plate(b.trim, rear - 0.052, 0.52, 0.46);
   }
 
-  function vehicle(kind) {
+  function vehicle(kind, {separateBrakeLights = false} = {}) {
     const heavy = kind === 'bus' || kind === 'routemaster';
     const classic = kind === 'routemaster';
     const axles = classic ? [-1.85, 2.75] : kind === 'bus' ? [-3.40, 3.80] :
@@ -287,8 +287,9 @@ function createCityModels(THREE, mergeGeometries, time) {
     const radius = heavy ? 0.50 : kind === 'car' ? 0.32 : 0.36;
     const track = heavy ? 1.08 : kind === 'van' ? 0.87 : kind === 'cab' ? 0.82 : 0.77;
     const b = {paint: geometryBatch(), trim: geometryBatch(), glass: geometryBatch(), lights: geometryBatch()};
+    const rearLights = !heavy && separateBrakeLights ? geometryBatch() : b.lights;
     if (heavy) busBody(b, classic, axles, radius);
-    else passengerBody(b, kind, axles, radius);
+    else passengerBody(b, kind, axles, radius, rearLights);
     const width = heavy ? 0.28 : 0.24;
     const wheel = tyre(radius, width, heavy, true);
     const trafficWheel = tyre(radius, width, heavy, false);
@@ -298,7 +299,32 @@ function createCityModels(THREE, mergeGeometries, time) {
     const trafficTrim = mergeGeometries([geometry.trim, ...parkedWheels]);
     parkedWheels.forEach(g => g.dispose());
     trafficWheel.dispose();
-    return {geometry, trafficTrim, wheels, wheel};
+    return {geometry, trafficTrim, wheels, wheel, brakeLights: rearLights === b.lights ? null : rearLights.finish()};
+  }
+
+  function policeEquipment() {
+    const trim = geometryBatch(), lenses = [];
+    const navy = 0x245583, yellow = 0xd9bf53;
+    for (const side of [-1, 1]) {
+      for (let row=0; row<2; row++) for (let i=0; i<6; i++) {
+        const z = -1.24 + i*0.46;
+        const pane = new THREE.PlaneGeometry(0.43, 0.084).rotateY(side*Math.PI/2);
+        trim.add(pane.translate(side*0.897, 0.688 + row*0.088, z), (i+row)%2 ? navy : yellow);
+      }
+      for (let i=0; i<3; i++) {
+        const chevron = new THREE.PlaneGeometry(0.07, 0.15).rotateZ(side*0.52).rotateY(Math.PI);
+        trim.add(chevron.translate(side*(0.12+i*0.105), 0.703, -2.205), i%2?0xb84c36:yellow);
+      }
+    }
+    box(trim,[1.06,0.044,0.25],[0,1.573,-0.29],black);
+    box(trim,[0.10,0.064,0.215],[0,1.62,-0.29],chrome);
+    for(const side of [-1,1]) {
+      const lens = geometryBatch();
+      box(lens,[0.44,0.084,0.209],[side*0.27,1.628,-0.29],0x467dd8);
+      box(lens,[0.045,0.068,0.214],[side*0.487,1.628,-0.29],0x8fbcf2);
+      lenses.push(lens.finish());
+    }
+    return {trim:trim.finish(),lenses};
   }
 
   function vehicleMaterials() {
@@ -525,5 +551,5 @@ function createCityModels(THREE, mergeGeometries, time) {
     return {material, depth};
   }
 
-  return {vehicle, vehicleMaterials, bicycle, cyclist, pedestrianGeometry, pedestrianMaterials};
+  return {vehicle, vehicleMaterials, policeEquipment, bicycle, cyclist, pedestrianGeometry, pedestrianMaterials};
 }

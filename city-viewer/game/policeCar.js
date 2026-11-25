@@ -12,11 +12,12 @@ import { nearestPatrolPoint, route } from './police.js';
 const CATCH_DISTANCE = 3.6; // metres between car centres = caught
 
 export class PoliceCar {
-  constructor(scene, blockedAt, roads, raycast) {
+  constructor(scene, blockedAt, roads, raycast, makeModel) {
     this.scene = scene;
     this.blockedAt = blockedAt;
     this.roads = roads;
     this.raycast = raycast;
+    this.makeModel = makeModel;
     this.car = null;
     this.active = false;
     this.stuckTime = 0;
@@ -33,8 +34,8 @@ export class PoliceCar {
     const spawn = this.roads.length ? nearestPatrolPoint(this.roads, behind) : behind;
     const p = freeSpot(spawn.x, spawn.z);
     if (!this.car) {
-      this.car = new DrivableCar(p.x, p.z, target.heading, this.blockedAt, 0xf2f4f8);
-      this.lights = addLightBar(this.car.mesh);
+      this.car = new DrivableCar(p.x, p.z, target.heading, this.blockedAt, this.makeModel(0xe0e4e6, true));
+      this.car.mesh.name = 'Patrol car';
       this.scene.add(this.car.mesh);
     }
     this.car.position.set(p.x, 0, p.z);
@@ -58,18 +59,18 @@ export class PoliceCar {
    * One frame of chasing. target = the car to chase.
    * Returns 'caught' when it touches the target, otherwise null.
    */
-  update(dt, target) {
+  update(dt, target, others) {
     if (!this.active) return null;
-    // Flashing blue/red lights.
+    // Alternate the two blue clusters on the roof.
     const blink = Math.floor(performance.now() / 180) % 2;
-    this.lights[0].material.color.setHex(blink ? 0x1a4dff : 0x111133);
-    this.lights[1].material.color.setHex(blink ? 0x330000 : 0xff1a1a);
-    if (this.blocked) { this.car.update(dt, { throttle: 0, brake: 1, steer: 0, handbrake: true }); return null; }
+    this.car.mesh.userData.beacons.forEach((mat, i) => { mat.emissiveIntensity = i === blink ? 3.2 : 0.10; });
+    if (this.blocked) { this.car.velocity.set(0,0,0); return null; }
 
     const c = this.car;
     const dx = target.position.x - c.position.x, dz = target.position.z - c.position.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < CATCH_DISTANCE && !this.gentle) return 'caught';
+    const contact = target.footprint && CityTraffic.vehicleOverlap(c.footprint(c.position.x,c.position.z,c.heading,0.24),target.footprint());
+    if ((dist < CATCH_DISTANCE || contact) && !this.gentle) return 'caught';
 
     const aim = this.waypoint(dt, c.position, target.position);
     const want = Math.atan2(c.position.x - aim.x, c.position.z - aim.z);
@@ -87,7 +88,7 @@ export class PoliceCar {
     }
     // Gentle mode: hang back ~12 m behind you (scary, but can't catch you).
     if (holding) input = { throttle: 0, brake: c.speed > 0.5 ? 0.6 : 0, steer: input.steer, handbrake: false };
-    c.update(dt, input);
+    c.update(dt, input, others);
     return null;
   }
 
@@ -106,16 +107,4 @@ export class PoliceCar {
     }
     return this.path[0] ?? target;
   }
-}
-
-/** Blue and red light boxes on the roof + POLICE-ish blue stripe. */
-function addLightBar(mesh) {
-  const blue = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.18, 0.3), new THREE.MeshBasicMaterial({ color: 0x1a4dff }));
-  const red = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.18, 0.3), new THREE.MeshBasicMaterial({ color: 0xff1a1a }));
-  blue.position.set(-0.35, 1.6, 0.3);
-  red.position.set(0.35, 1.6, 0.3);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.94, 0.16, 4.3), new THREE.MeshStandardMaterial({ color: 0x1a3fbf }));
-  stripe.position.y = 0.7;
-  mesh.add(blue, red, stripe);
-  return [blue, red];
 }

@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "start": "node city-viewer/serve.js",
-    "dev": "npm start"
+    "dev": "npm start",
+    "test": "node --test city-viewer/tools/test-*.js"
   }
 }

@@ -2,8 +2,7 @@
 //
 //  - Listens for driving input sent by controller.html (via relay.js).
 //  - Sends vibration patterns back to the phone (haptics).
-//  - Shows a QR code (press P, or the 📱 button) that opens the controller
-//    on a phone on the same Wi-Fi / hotspot.
+//  - Shows separate P1 and P2 codes in Settings for phones on the same network.
 
 const QR_LIB = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js';
 
@@ -22,91 +21,132 @@ export const HAPTICS = {
 };
 
 export class PhoneController {
-  /** onAction: called when the phone's E button is pressed. */
-  constructor(onAction) {
-    this.onAction = onAction;
-    this.onPhonesChange = () => {}; // set by the game: called with the number of phones connected
-    this.onThrow = () => {}; // set by the game: phone THROW button pressed
-    this.onScan = () => {}; // set by the game: called with a photo (data URL) of a scanned item
-    this.input = null;
-    this.lastInputTime = 0;
-    this.lastAction = 0;
-    this.phones = 0;
+  constructor(panel, translate) {
+    this.translate = translate;
+    this.room = Array.from(crypto.getRandomValues(new Uint8Array(12)), n => n.toString(16).padStart(2, '0')).join('');
+    this.slots = [0, 1].map(() => ({ input: null, inputTime: 0, lastAction: null, lastThrow: null }));
+    this.connected = new Set();
+    this.onPhonesChange = () => {};
+    this.onAction = () => {};
+    this.onThrow = () => {};
+    this.onScan = () => {};
+    this.panel = panel;
+    this.network = panel.querySelector('.qr-network');
+    this.cards = [...panel.querySelectorAll('.qr-player')];
 
+    this.events = new EventSource('/api/events?' + new URLSearchParams({ role: 'game', room: this.room }));
+    this.events.addEventListener('input', e => {
+      const input = JSON.parse(e.data), who = input.player - 1;
+      const slot = this.slots[who];
+      if (!slot) return;
+      slot.input = input;
+      slot.inputTime = performance.now();
+      if (input.action && input.action !== slot.lastAction) {
+        slot.lastAction = input.action;
+        this.onAction(who);
+      }
+      if (input.throw && input.throw !== slot.lastThrow) {
+        slot.lastThrow = input.throw;
+        this.onThrow(who);
+      }
+    });
+    this.events.addEventListener('scan', e => {
+      const {player, image, cut} = JSON.parse(e.data);
+      this.onScan(player - 1, image, cut);
+    });
+    this.events.addEventListener('phones', e => {
+      this.connected = new Set(JSON.parse(e.data).slots.map(player => player - 1));
+      this.slots.forEach((slot, who) => { if (!this.connected.has(who)) slot.input = null; });
+      this.renderStatus();
+      this.onPhonesChange(this.connected);
+    });
+    this.events.onerror = () => {
+      this.connected.clear();
+      this.clearInput();
+      this.renderStatus();
+    };
+    this.renderStatus();
+  }
+
+  hasPlayer(who) { return this.connected.has(who); }
+
+  getInput(who) {
+    const slot = this.slots[who];
+    return this.hasPlayer(who) && slot.input && performance.now() - slot.inputTime < 1000 ? slot.input : null;
+  }
+
+  clearInput() {
+    for (const slot of this.slots) slot.input = null;
+  }
+
+  send(endpoint, data) {
+    if (!this.connected.size) return;
+    fetch('/api/' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room: this.room, ...data }) }).catch(() => {});
+  }
+
+  haptic(pattern, who) {
+    if (pattern) this.send('haptic', { player: who == null ? undefined : who + 1, pattern });
+  }
+
+  message(text, pager) {
+    this.send('phone-message', { text, pager });
+  }
+
+  renderStatus() {
+    this.cards.forEach((card, who) => {
+      card.querySelector('.qr-status').textContent = this.translate(this.hasPlayer(who) ? 'phoneConnected' : 'phoneWaiting');
+    });
+  }
+
+  async renderCodes() {
+    this.renderStatus();
+    if (this.loading || this.ready) return;
+    this.loading = true;
+    this.network.textContent = this.translate('phoneLoading');
     try {
-      const events = new EventSource('/api/events?role=game');
-      events.addEventListener('input', (e) => {
-        const d = JSON.parse(e.data);
-        this.input = d;
-        this.lastInputTime = performance.now();
-        if (d.action && d.action !== this.lastAction) { this.lastAction = d.action; this.onAction(); }
-        if (d.throw && d.throw !== this.lastThrow) { this.lastThrow = d.throw; this.onThrow(); }
+      const response = await fetch('/api/info');
+      if (!response.ok) throw new Error('Server unavailable');
+      const {ips, port} = await response.json();
+      let origin = location.origin;
+      if (['localhost', '127.0.0.1', '[::1]', '0.0.0.0'].includes(location.hostname)) {
+        if (!ips?.length) throw new Error('No LAN address');
+        origin = 'http://' + ips[0] + ':' + port;
+      }
+      const urls = this.cards.map((card, who) => {
+        const url = new URL('/controller.html', origin);
+        url.search = new URLSearchParams({ room: this.room, player: String(who + 1) });
+        const link = card.querySelector('.qr-url');
+        link.href = url.href;
+        link.hidden = false;
+        return url.href;
       });
-      events.addEventListener('scan', (e) => { const d = JSON.parse(e.data); this.onScan(d.image, d.cut); });
-      events.addEventListener('phones', (e) => {
-        this.phones = JSON.parse(e.data).count;
-        this.button.textContent = this.phones ? `📱 Phone connected (${this.phones})` : '📱 Phone controller (P)';
-        if (this.phones) this.hideQr();
-        this.onPhonesChange(this.phones);
+      await loadQrLibrary();
+      this.cards.forEach((card, who) => {
+        const qr = window.qrcode(0, 'M');
+        qr.addData(urls[who]);
+        qr.make();
+        card.querySelector('.qr-img').innerHTML = qr.createImgTag(5, 16, 'P' + (who + 1) + ' QR');
       });
-    } catch { /* opened as a file, not through serve.js - no phone support */ }
-
-    this.button = document.createElement('button');
-    this.button.id = 'phone-btn';
-    this.button.textContent = '📱 Phone controller (P)';
-    this.button.onclick = () => { this.toggleQr(); this.button.blur(); };
-    document.body.appendChild(this.button);
-  }
-
-  /** The phone's controls, or null if no phone has sent anything recently. */
-  getInput() {
-    return this.input && performance.now() - this.lastInputTime < 1000 ? this.input : null;
-  }
-
-  /** Make the phone vibrate (pattern = one of HAPTICS). */
-  haptic(pattern) {
-    if (!this.phones) return;
-    fetch('/api/haptic', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pattern }) }).catch(() => {});
-  }
-
-  // ---- QR code overlay ------------------------------------------------------
-  async toggleQr() {
-    if (this.overlay) { this.hideQr(); return; }
-    const overlay = document.createElement('div');
-    this.overlay = overlay;
-    overlay.id = 'qr-overlay';
-    overlay.innerHTML = '<div class="qr-card"><h2>Scan to drive</h2><div class="qr-img">Loading…</div><p class="qr-url"></p><p class="qr-tip">Phone and laptop must be on the same Wi-Fi (or the phone\'s hotspot). Press P to close.</p></div>';
-    overlay.onclick = () => this.hideQr();
-    document.body.appendChild(overlay);
-
-    try {
-      const info = await (await fetch('/api/info')).json();
-      const ip = info.ips[0];
-      if (!ip) throw new Error('no network');
-      const url = `http://${ip}:${info.port}/controller.html`;
-      overlay.querySelector('.qr-url').textContent = url;
-      await loadScript(QR_LIB);
-      const qr = window.qrcode(0, 'M');
-      qr.addData(url);
-      qr.make();
-      overlay.querySelector('.qr-img').innerHTML = qr.createImgTag(8, 16);
-    } catch (err) {
-      overlay.querySelector('.qr-img').textContent = 'Could not make the QR code: ' + err.message;
+      this.ready = true;
+      this.network.textContent = '';
+    } catch {
+      this.network.textContent = this.translate('phoneUnavailable');
+    } finally {
+      this.loading = false;
     }
-  }
-
-  hideQr() {
-    if (this.overlay) { this.overlay.remove(); this.overlay = null; }
   }
 }
 
-function loadScript(src) {
-  return new Promise((resolve, reject) => {
-    if (window.qrcode) return resolve();
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('QR library failed to load (offline?)'));
-    document.head.appendChild(s);
+let qrPromise;
+function loadQrLibrary() {
+  if (window.qrcode) return Promise.resolve();
+  qrPromise ??= new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = QR_LIB;
+    script.onload = resolve;
+    script.onerror = () => { qrPromise = null; script.remove(); reject(new Error('QR library unavailable')); };
+    document.head.appendChild(script);
   });
+  return qrPromise;
 }

@@ -119,7 +119,7 @@ export class MissionManager {
       this.state = 'escape';
       this.pickupBeam.visible = false;
       this.onEvent('escape', who);
-      this.showBanner('THE MET IS ONTO YOU!', `Hide in the ${this.escape.name} (press E there)`, 'failed');
+      this.showBanner('THE MET IS ONTO YOU!', `Hide in the ${this.escape.name}`, 'failed');
       this.onTarget('escape', this.escape);
       return;
     }
@@ -166,6 +166,27 @@ export class MissionManager {
     this.hud.querySelector('.m-money span').textContent =
       this.players > 1 ? `${this.moneyBy[0]} · P2 £${this.moneyBy[1]}` : String(this.money);
     this.hud.querySelector('.m-money').firstChild.textContent = this.players > 1 ? 'P1 £' : '£';
+  }
+
+  snapshot() {
+    const keys = ['money','moneyBy','passed','state','wait','timeLeft','pickup','dropoff','item','intro','plannedDropoff','plannedEscape','escape','script'];
+    const snapshot = JSON.parse(JSON.stringify(Object.fromEntries(keys.map(key => [key, this[key] ?? (key === 'script' ? [] : null)]))));
+    snapshot.wait = Math.max(0, snapshot.wait);
+    snapshot.timeLeft = Math.max(0, snapshot.timeLeft);
+    return snapshot;
+  }
+
+  restore(saved, escapeDone) {
+    for (const key of ['money','moneyBy','passed','state','wait','timeLeft','pickup','dropoff','item','intro','plannedDropoff','plannedEscape','escape','script']) this[key] = saved[key];
+    for (const escape of [this.escape, this.plannedEscape, ...this.script.map(job => job.escape)]) {
+      if (escape) escape.done = escapeDone;
+    }
+    this.pickupBeam.visible = this.dropoffBeam.visible = false;
+    if (this.state === 'pickup') placeBeam(this.pickupBeam, this.pickup);
+    if (this.state === 'dropoff') placeBeam(this.dropoffBeam, this.dropoff);
+    this.bannerTime = 0;
+    this.banner.style.opacity = '0';
+    this.refreshMoney();
   }
 
   // ---- Every frame ---------------------------------------------------------------
@@ -222,7 +243,7 @@ export class MissionManager {
     task.className = `m-task ${this.state}`;
     this.hud.querySelector('.m-title').textContent =
       this.state === 'pickup' ? `PICK UP · ${this.pickup.name}`
-        : this.state === 'escape' ? `LOSE THE POLICE · ${this.escape.name} (E)`
+        : this.state === 'escape' ? `LOSE THE POLICE · ${this.escape.name}`
         : `DELIVER · ${this.dropoff.name}`;
     this.hud.querySelector('.m-sub').textContent = `${Math.round(dist2d(pos, target))} m · ${this.item}`;
 
