@@ -1,9 +1,17 @@
-function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, project, contains, addCircle}) {
+function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, project, contains, addCircle, stoneSurface, stoneTile=2}) {
   const TAU = Math.PI * 2;
   const group = new THREE.Group();
   group.name = 'Detailed landmarks';
-  const stone = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.87});
-  stone.onBeforeCompile=shader=>{
+  const stone = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.87,
+    map:stoneSurface?.color ?? null,normalMap:stoneSurface?.normal ?? null,normalScale:new THREE.Vector2(0.34,0.34)});
+  stone.name = 'Landmarks · photographed masonry';
+  if(stone.map){
+    stone.onBeforeCompile=shader=>{
+      shader.fragmentShader=shader.fragmentShader.replace('#include <map_fragment>',`vec3 stoneTint=diffuseColor.rgb;
+        #include <map_fragment>
+        diffuseColor.rgb=mix(stoneTint,diffuseColor.rgb*1.68,0.72);`);
+    };
+  }else stone.onBeforeCompile=shader=>{
     shader.vertexShader='varying vec3 vStonePosition;\n'+shader.vertexShader.replace('#include <begin_vertex>',
       '#include <begin_vertex>\nvStonePosition=position;');
     shader.fragmentShader='varying vec3 vStonePosition;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
@@ -24,6 +32,24 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
   const limestone = 0xc7bba5, lightStone = 0xd6cbb7, shadeStone = 0x9e9280;
   const towerStone = 0xb8a582, towerTrim = 0xccb590, lead = 0x41494c, gold = 0xaa8a47;
   const darkGlass = 0x333b40, iron = 0x39434a;
+
+  function masonryUV(geometry) {
+    const {position,normal}=geometry.attributes;
+    const uv=new Float32Array(position.count*2);
+    for(let i=0;i<position.count;i+=3){
+      const nx=normal.getX(i)+normal.getX(i+1)+normal.getX(i+2);
+      const ny=normal.getY(i)+normal.getY(i+1)+normal.getY(i+2);
+      const nz=normal.getZ(i)+normal.getZ(i+1)+normal.getZ(i+2);
+      const top=Math.abs(ny)>Math.max(Math.abs(nx),Math.abs(nz));
+      const side=Math.abs(nx)>Math.abs(nz);
+      for(let j=i;j<i+3;j++){
+        const u=top?position.getX(j):side?-Math.sign(nx)*position.getZ(j):Math.sign(nz)*position.getX(j);
+        const v=top?-Math.sign(ny)*position.getZ(j):position.getY(j);
+        uv[j*2]=u/stoneTile;uv[j*2+1]=v/stoneTile;
+      }
+    }
+    geometry.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  }
 
   function bounds(ring) {
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
@@ -52,7 +78,8 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
         const geo = geometry.index ? geometry.toNonIndexed() : geometry;
         if (geo !== geometry) geometry.dispose();
         geo.applyMatrix4(matrix);
-        geo.deleteAttribute('uv');
+        if(mat===stone&&(stone.map||stone.normalMap))masonryUV(geo);
+        else geo.deleteAttribute('uv');
         const tint = new THREE.Color(color), count = geo.attributes.position.count;
         const values = new Float32Array(count*3);
         for (let i=0; i<count; i++) tint.toArray(values,i*3);

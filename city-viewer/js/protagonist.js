@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { surfaces, tileMetres } from './street-surfaces.js';
 
 const THIGH = 0.443;
 const SHIN = 0.421;
@@ -36,6 +37,7 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
   const skin = avatar.skin;
   const denim = avatar.trousers;
   const seams = new THREE.Color(coat).multiplyScalar(0.57).getHex();
+  const fabricFor = tint => tint === denim ? 'denim' : tint === coat || tint === seams ? 'ripstop' : null;
   const hair = 0x302622;
   const joint = (parent, x = 0, y = 0, z = 0) => {
     const g = new THREE.Group();
@@ -44,6 +46,14 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     return g;
   };
   const add = (parent, colour, geometry, x, y, z) => {
+    const fabric = fabricFor(colour);
+    if (fabric && (surfaces[fabric]?.color || surfaces[fabric]?.normal)) {
+      geometry.computeBoundingBox();
+      const size = geometry.boundingBox.getSize(new THREE.Vector3());
+      const uv = geometry.attributes.uv, tile = tileMetres[fabric];
+      const around = Math.PI * (size.x + size.z) / 2;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i)*around/tile, uv.getY(i)*size.y/tile);
+    }
     const key = parent.id + ':' + colour;
     if (!parts.has(key)) parts.set(key, { parent, colour, geometries: [] });
     parts.get(key).geometries.push(geometry.translate(x, y, z));
@@ -106,7 +116,16 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     legs.push({ hip, knee, foot });
   }
   for (const { parent, colour, geometries } of parts.values()) {
-    if (!materials.has(colour)) materials.set(colour, new THREE.MeshStandardMaterial({ color: colour, roughness: 0.86 }));
+    if (!materials.has(colour)) {
+      const fabric = fabricFor(colour), surface = surfaces[fabric];
+      const material = new THREE.MeshStandardMaterial({ color: colour, roughness: fabric==='ripstop'?0.73:0.86,
+        map: surface?.color ?? null, normalMap: surface?.normal ?? null, normalScale: new THREE.Vector2(0.36,0.36) });
+      if (surface?.color) {
+        material.name = fabric==='denim'?'Protagonist · photographed denim':'Protagonist · ripstop shell';
+        material.color.multiplyScalar(fabric==='denim'?6.3:2.15);
+      }
+      materials.set(colour,material);
+    }
     const mesh = new THREE.Mesh(mergeGeometries(geometries), materials.get(colour));
     geometries.forEach(g => g.dispose());
     mesh.castShadow = mesh.receiveShadow = true;

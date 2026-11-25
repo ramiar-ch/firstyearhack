@@ -80,6 +80,22 @@ function allocSlot() {
   return -1;
 }
 
+function landOnSurface(p, dt) {
+  const floor = ctx.groundAt?.(p.pos.x, p.pos.z) ?? 0;
+  if (p.grounded && p.vy <= 0) {
+    p.pos.y = floor;
+    p.vy = 0;
+    return;
+  }
+  p.vy -= GRAVITY * dt;
+  p.pos.y += p.vy * dt;
+  p.grounded = p.pos.y <= floor;
+  if (p.grounded) {
+    p.pos.y = floor;
+    p.vy = 0;
+  }
+}
+
 export function updatePlayer(p, dt) {
   const inp = p.input;
   if (!inp) return;
@@ -98,13 +114,7 @@ export function updatePlayer(p, dt) {
     p.vel.x = ctx.lerp(p.vel.x, 0, k);
     p.vel.z = ctx.lerp(p.vel.z, 0, k);
     ctx.moveWalk(p.pos, p.vel.x * dt, p.vel.z * dt);
-    p.vy -= GRAVITY * dt;
-    p.pos.y += p.vy * dt;
-    if (p.pos.y <= 0) {
-      p.pos.y = 0;
-      p.vy = 0;
-      p.grounded = true;
-    }
+    landOnSurface(p, dt);
     return;
   }
 
@@ -149,16 +159,8 @@ export function updatePlayer(p, dt) {
     p.gait.vz = (p.pos.z - zBefore) / dt;
   }
 
-  p.vy -= GRAVITY * dt;
-  p.pos.y += p.vy * dt;
-  if (p.pos.y <= 0) {
-    p.pos.y = 0;
-    p.vy = 0;
-    p.grounded = true;
-    if (inp.jumpPressed) p.vy = JUMP_VY;
-  } else {
-    p.grounded = false;
-  }
+  landOnSurface(p, dt);
+  if (p.grounded && inp.jumpPressed) p.vy = JUMP_VY;
 
   const spd = Math.hypot(p.vel.x, p.vel.z);
   p.bob += dt * spd * 2.6;

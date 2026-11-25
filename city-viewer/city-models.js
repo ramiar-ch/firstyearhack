@@ -51,6 +51,7 @@ function createCityModels(THREE, mergeGeometries, time) {
     const rings = [...stations].sort((a, b) => a - b).filter(z => z >= ends[0] && z <= ends[1]);
     const vertices = [];
     const faces = [];
+    const ringSize = 10;
     for (const z of rings) {
       const i = profile.findIndex(([end]) => end >= z && end > ends[0]);
       const [z0, w0, top0] = profile[i - 1];
@@ -65,21 +66,21 @@ function createCityModels(THREE, mergeGeometries, time) {
       }
       const bevel = Math.min(shoulder, (top - sill) * 0.45);
       vertices.push([-w + 0.10, sill, z], [w - 0.10, sill, z], [w, sill + 0.05, z],
-        [w, top - bevel, z], [w - 0.075, top, z], [-w + 0.075, top, z],
-        [-w, top - bevel, z], [-w, sill + 0.05, z]);
+        [w, top - bevel, z], [w - 0.024, top - bevel * 0.24, z], [w - 0.075, top, z],
+        [-w + 0.075, top, z], [-w + 0.024, top - bevel * 0.24, z], [-w, top - bevel, z], [-w, sill + 0.05, z]);
     }
     for (let r = 1; r < rings.length; r++) {
-      for (let i = 0; i < 8; i++) {
-        const a = (r - 1) * 8 + i;
-        const b = (r - 1) * 8 + (i + 1) % 8;
-        faces.push(a, b, b + 8, a, b + 8, a + 8);
+      for (let i = 0; i < ringSize; i++) {
+        const a = (r - 1) * ringSize + i;
+        const b = (r - 1) * ringSize + (i + 1) % ringSize;
+        faces.push(a,b,b+ringSize,a,b+ringSize,a+ringSize);
       }
     }
-    const last = vertices.length - 8;
+    const last = vertices.length - ringSize;
     const caps = vertices.length;
-    vertices.push(...vertices.slice(0, 8), ...vertices.slice(last));
-    for (let i = 1; i < 7; i++) {
-      faces.push(caps, caps + i + 1, caps + i, caps + 8, caps + i + 8, caps + i + 9);
+    vertices.push(...vertices.slice(0,ringSize),...vertices.slice(last));
+    for (let i = 1; i < ringSize-1; i++) {
+      faces.push(caps,caps+i+1,caps+i,caps+ringSize,caps+i+ringSize,caps+i+ringSize+1);
     }
     batch.add(surface(vertices, faces), color);
   }
@@ -160,11 +161,11 @@ function createCityModels(THREE, mergeGeometries, time) {
     const profile = [[rim, -h], [radius * 0.86, -h], [radius * 0.965, -h * 0.82],
       [radius, -h * 0.53], [radius, h * 0.53], [radius * 0.965, h * 0.82], [radius * 0.86, h], [rim, h]];
     const points = detail ? profile : profile.filter((_, i) => i !== 2 && i !== 5);
-    const segments = detail ? 12 : 10;
+    const segments = detail ? 24 : 12;
     batch.add(new THREE.LatheGeometry(points.map(p => new THREE.Vector2(...p)), segments).rotateZ(-Math.PI / 2), rubber);
     batch.add(new THREE.CylinderGeometry(rim, rim, width + 0.008, segments).rotateZ(-Math.PI / 2), chrome);
     if (!detail) return batch.finish();
-    batch.add(new THREE.CylinderGeometry(rim * 0.82, rim * 0.82, width + 0.014, 12).rotateZ(-Math.PI / 2), black);
+    batch.add(new THREE.CylinderGeometry(rim * 0.82, rim * 0.82, width + 0.014, segments).rotateZ(-Math.PI / 2), black);
     const hub = heavy ? 0x7b8388 : 0xb9c1cb;
     batch.add(new THREE.CylinderGeometry(rim * 0.37, rim * 0.37, width + 0.029, 10).rotateZ(-Math.PI / 2), hub);
     for (let i = 0; i < 5; i++) {
@@ -172,6 +173,9 @@ function createCityModels(THREE, mergeGeometries, time) {
       const spoke = new THREE.BoxGeometry(width + 0.022, rim * 0.64, rim * 0.15);
       spoke.translate(0, rim * 0.48, 0).rotateX(angle);
       batch.add(spoke, hub);
+    }
+    for (const side of [-1,1]) {
+      batch.add(new THREE.TorusGeometry(rim * 0.91, 0.008, 4, segments).rotateY(Math.PI/2).translate(side*(h+0.012),0,0), hub);
     }
     return batch.finish();
   }
@@ -353,8 +357,15 @@ function createCityModels(THREE, mergeGeometries, time) {
     const wheel = tyre(radius, width, heavy, true);
     const trafficWheel = tyre(radius, width, heavy, false);
     const wheels = axles.flatMap((z, axle) => [-track, track].map(x => ({x, y: radius, z, front: axle === 1})));
+    const dual = (source,x)=>{
+      const inner=source.clone().translate(-Math.sign(x)*(width+0.036),0,0);
+      const geometry=mergeGeometries([source,inner]);
+      inner.dispose();
+      return geometry;
+    };
+    if(heavy)for(const axle of wheels){if(!axle.front)axle.geometry=dual(wheel,axle.x);}
     const geometry = Object.fromEntries(Object.entries(b).map(([key, batch]) => [key, batch.finish()]));
-    const parkedWheels = wheels.map(({x, y, z}) => trafficWheel.clone().translate(x, y, z));
+    const parkedWheels = wheels.map(({x,y,z,front}) => (heavy&&!front?dual(trafficWheel,x):trafficWheel.clone()).translate(x,y,z));
     const trafficTrim = mergeGeometries([geometry.trim, ...parkedWheels]);
     parkedWheels.forEach(g => g.dispose());
     trafficWheel.dispose();
@@ -392,10 +403,10 @@ function createCityModels(THREE, mergeGeometries, time) {
 
   function vehicleMaterials() {
     return {
-      paint: new THREE.MeshPhysicalMaterial({vertexColors: true, roughness: 0.34, metalness: 0.27, clearcoat: 0.48, clearcoatRoughness: 0.25}),
+      paint: new THREE.MeshPhysicalMaterial({vertexColors: true, roughness: 0.31, metalness: 0.13, clearcoat: 0.74, clearcoatRoughness: 0.15}),
       trim: new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.67, metalness: 0.12}),
-      glass: new THREE.MeshPhysicalMaterial({vertexColors: true, color: 0x26343b, roughness: 0.26, metalness: 0.29,
-        clearcoat: 0.75, clearcoatRoughness: 0.16, side: THREE.FrontSide}),
+      glass: new THREE.MeshPhysicalMaterial({vertexColors: true, color: 0x20292c, roughness: 0.22, metalness: 0, ior: 1.5,
+        clearcoat: 0.55, clearcoatRoughness: 0.14, side: THREE.FrontSide}),
       lights: new THREE.MeshBasicMaterial({vertexColors: true}),
     };
   }
@@ -593,7 +604,7 @@ function createCityModels(THREE, mergeGeometries, time) {
     return batch.finish();
   }
 
-  function pedestrianMaterials() {
+  function pedestrianMaterials(jacketMap,denimMap,denimTile=0.271) {
     const material = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.89});
     const depth = new THREE.MeshDepthMaterial({depthPacking: THREE.RGBADepthPacking});
     const common = `
@@ -658,6 +669,18 @@ function createCityModels(THREE, mergeGeometries, time) {
               if (features.y == 3.0) vColor *= trousers;
               if (features.y == 4.0) vColor *= 0.65 + skin * 0.75;
             `);
+          if (jacketMap || denimMap) {
+            shader.uniforms.jacketMap = {value:jacketMap};
+            shader.uniforms.denimMap = {value:denimMap};
+            const fabricVarying = 'varying vec3 vCloth; varying float vFabricKind;\n';
+            shader.vertexShader = fabricVarying + shader.vertexShader.replace('#include <begin_vertex>',
+              '#include <begin_vertex>\nvCloth=position; vFabricKind=features.y;');
+            shader.fragmentShader = fabricVarying + 'uniform sampler2D jacketMap,denimMap;\n' + shader.fragmentShader
+              .replace('#include <map_fragment>', `#include <map_fragment>
+                vec2 fabric=vec2(vCloth.x+vCloth.z*0.7,vCloth.y);
+                ${jacketMap?'if(abs(vFabricKind-1.0)<0.1)diffuseColor.rgb*=mix(0.70,1.32,texture2D(jacketMap,fabric/0.27).r);':''}
+                ${denimMap?`if(abs(vFabricKind-3.0)<0.1)diffuseColor.rgb*=mix(0.80,1.35,luminance(texture2D(denimMap,fabric/${denimTile}).rgb)*3.2);`:''}`);
+          }
         }
       };
       m.customProgramCacheKey = () => 'pedestrian-' + m.type;

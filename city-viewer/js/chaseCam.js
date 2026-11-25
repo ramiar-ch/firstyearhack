@@ -92,7 +92,7 @@ export function updateChaseCam(p, dt, blockedAt) {
 
   const spd = Math.hypot(p.vel.x, p.vel.z);
   const bob =
-    p.pos.y < 0.02 ? Math.sin(p.bob * 2) * 0.035 * Math.min(1, spd / 1.5) : 0;
+    p.grounded ? Math.sin(p.bob * 2) * 0.035 * Math.min(1, spd / 1.5) : 0;
 
   cam.layers.enableAll();
   cam.layers.disable(9 + p.slot);
