@@ -1,8 +1,9 @@
 const PREFIX = 'kclCitySave:';
+const VEHICLES = new Set(['cab','car','van','bus','routemaster','bike','saloon','estate']);
 const finite = value => typeof value === 'number' && Number.isFinite(value) && Math.abs(value) < 1e9;
 const vec = value => Array.isArray(value) && value.length === 3 && value.every(finite);
 const pose = value => value && vec(value.position) && vec(value.velocity) && finite(value.heading) &&
-  (value.kind == null || ['cab','car','van','bus','routemaster','bike'].includes(value.kind)) &&
+  (value.kind == null || VEHICLES.has(value.kind)) &&
   (value.colour == null || (Number.isInteger(value.colour) && value.colour >= 0 && value.colour <= 0xffffff)) &&
   (value.sourceId == null || (Number.isInteger(value.sourceId) && value.sourceId > 0));
 export function validSave(s) {
@@ -27,7 +28,7 @@ export function validSave(s) {
     if (!s.wanted || !Number.isInteger(s.wanted.level) || s.wanted.level < 0 || s.wanted.level > 5 || !finite(s.wanted.farTime)) return false;
     if (!Array.isArray(s.patrols) || s.patrols.length > 3 || s.patrols.some(p => p && !pose(p))) return false;
   }
-  if (s.mode === 'drive' && (!s.drive || !['cab','car','van','bus','routemaster','bike'].includes(s.drive.kind) || !['x','z','yaw','vx','vz'].every(k => finite(s.drive[k])))) return false;
+  if (s.mode === 'drive' && (!s.drive || !VEHICLES.has(s.drive.kind) || !['x','z','yaw','vx','vz'].every(k => finite(s.drive[k])))) return false;
   return true;
 }
 export function readSave(activity, storage = localStorage) {

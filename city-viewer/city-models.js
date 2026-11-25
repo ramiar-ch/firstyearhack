@@ -85,20 +85,40 @@ function createCityModels(THREE, mergeGeometries, time) {
   }
 
   function insetPanel(batches, corners, windows, wipers = []) {
-    batches.paint.add(surface(corners, [0, 1, 2, 0, 2, 3]));
     const [a, b, c, d] = corners.map(p => new THREE.Vector3(...p));
-    const offset = b.clone().sub(a).cross(d.clone().sub(a)).normalize().multiplyScalar(0.008);
-    const point = (u, v) => a.clone().lerp(b, u).lerp(d.clone().lerp(c, u), v).add(offset);
-    for (const [left, right, bottom, top] of windows) {
-      const pane = [point(left, bottom), point(right, bottom), point(right, top), point(left, top)];
-      batches.glass.add(surface(pane.map(p => p.toArray()), [0, 1, 2, 0, 2, 3]));
+    const normal = b.clone().sub(a).cross(d.clone().sub(a)).normalize();
+    const point = (u, v) => a.clone().lerp(b, u).lerp(d.clone().lerp(c, u), v);
+    const quad = (u0, u1, v0, v1) => surface([
+      point(u0, v0).toArray(), point(u1, v0).toArray(), point(u1, v1).toArray(), point(u0, v1).toArray(),
+    ], [0, 1, 2, 0, 2, 3]);
+    // Share edges between the glazing, gasket and body. Slanted side panels
+    // aren't always planar, so overlaying a pane used to cut through the paint.
+    const sorted = values => [...new Set([0, 1, ...values])].sort((x, y) => x - y);
+    const seal = ([left, right, bottom, top]) => [left + 0.010, right - 0.010, bottom + 0.016, top - 0.016];
+    const glass = windows.map(seal);
+    const u = sorted([...windows, ...glass].flatMap(([l,r]) => [l,r]));
+    const v = sorted([...windows, ...glass].flatMap(([, ,b,t]) => [b,t]));
+    const within = (panes, x, y) => panes.some(([l,r,b,t]) => x > l && x < r && y > b && y < t);
+    for (let j = 1; j < v.length; j++) {
+      const y = (v[j-1]+v[j])/2;
+      const partAt = i => {
+        const x = (u[i-1]+u[i])/2;
+        return within(glass,x,y) ? 'glass' : within(windows,x,y) ? 'trim' : 'paint';
+      };
+      for (let i = 1; i < u.length;) {
+        const part = partAt(i);
+        let end = i;
+        while (end + 1 < u.length && partAt(end + 1) === part) end++;
+        batches[part].add(quad(u[i-1],u[end],v[j-1],v[j]),part === 'trim' ? black : white);
+        i = end + 1;
+      }
     }
     for (const [start, end, rise] of wipers) {
-      const from = point(start, 0.13).add(offset), to = point(end, 0.13 + rise).add(offset);
-      const axis = to.clone().sub(from), centre = from.lerp(to, 0.5);
-      const rotation = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis.clone().normalize());
-      batches.trim.add(new THREE.CylinderGeometry(0.009, 0.009, axis.length(), 5)
-        .applyQuaternion(rotation).translate(centre.x, centre.y, centre.z), black);
+      const pivot = point(start,0.10).addScaledVector(normal,0.024);
+      const tip = point(end,0.13+rise).addScaledVector(normal,0.022);
+      const centre = pivot.clone().lerp(tip,0.72);
+      rod(batches.trim,pivot.toArray(),centre.toArray(),0.010,black,5);
+      rod(batches.trim,centre.clone().lerp(tip, -0.5).toArray(),tip.toArray(),0.012,black,5);
     }
   }
 
@@ -159,18 +179,23 @@ function createCityModels(THREE, mergeGeometries, time) {
   function passengerBody(b, kind, axles, radius, rearLights) {
     const cab = kind === 'cab';
     const van = kind === 'van';
-    const end = van ? 2.65 : cab ? 2.3 : 2.2;
-    const w = van ? 1.0 : cab ? 0.94 : 0.89;
-    const top = van ? 1.27 : cab ? 1.14 : 0.98;
+    const saloon = kind === 'saloon', estate = kind === 'estate';
+    const end = van ? 2.65 : saloon ? 2.38 : estate ? 2.48 : cab ? 2.3 : 2.2;
+    const w = van ? 1.0 : cab ? 0.94 : saloon || estate ? 0.92 : 0.89;
+    const top = van ? 1.27 : cab ? 1.14 : estate ? 1.03 : saloon ? 0.91 : 0.98;
     const stations = [-end, -end + 0.16, -end + 0.55, 0.65, end - 0.36, end - 0.10, end];
     const widths = [0.88, 0.98, 1, 1, 0.99, 0.91, 0.84];
     const heights = [top - 0.18, top - 0.06, top, top, top - 0.04, top - 0.12, top - 0.22];
     bodyShell(b.paint, stations.map((z, i) => [z, w * widths[i], heights[i]]), radius * 0.91, axles, radius);
     const sill = van ? [-2.54, 1.77, 0.94, 0.90, top - 0.07] :
+      saloon ? [-1.57, 1.19, 0.84, 0.86, top-0.04] : estate ? [-2.37, 1.16, 0.87, 0.86, top-0.055] :
       cab ? [-1.94, 1.16, 0.86, 0.84, top - 0.06] : [-1.79, 1.00, 0.81, 0.82, top - 0.06];
     const roof = van ? [-2.46, 0.97, 0.86, 0.80, 2.42] :
+      saloon ? [-0.83,0.32,0.63,0.67,1.42] : estate ? [-2.01,0.39,0.72,0.71,1.59] :
       cab ? [-1.68, 0.47, 0.73, 0.71, 1.93] : [-1.25, 0.18, 0.64, 0.68, 1.49];
-    const panes = van ? [[0.66, 0.96, 0.08, 0.81]] : [[0.09, 0.46, 0.12, 0.88], [0.51, 0.95, 0.12, 0.88]];
+    const panes = van ? [[0.66, 0.96, 0.08, 0.81]] :
+      estate ? [[0.065,0.26,0.18,0.87],[0.29,0.59,0.12,0.88],[0.63,0.95,0.12,0.87]] :
+      [[0.09, 0.46, 0.12, 0.88], [0.51, 0.95, 0.12, 0.88]];
     carCabin(b, sill, roof, panes);
 
     for (const side of [-1, 1]) {
@@ -181,15 +206,28 @@ function createCityModels(THREE, mergeGeometries, time) {
       box(b.paint, [0.15, 0.092, 0.16], [mx + side * 0.065, my, mz]);
       box(b.trim, [0.115, 0.06, 0.012], [mx + side * 0.065, my, mz - 0.081], chrome);
       for (const z of van ? [-0.69, 0.79] : [-0.72, 0.31]) {
-        box(b.trim, [0.016, 0.038, 0.13], [side * (w + 0.004), top - 0.14, z], chrome);
+        box(b.trim, [0.014, 0.045, 0.148], [side * (w + 0.003), top - 0.16, z], black);
+        box(b.trim, [0.017, 0.021, 0.106], [side * (w + 0.014), top - 0.155, z], cab ? chrome : 0x697078);
       }
+      for (const z of van ? [-1.78,-0.22,1.37] : [-0.99,-0.20,0.81]) {
+        const bottom = top - 0.29, sideX = side * (w + 0.005);
+        // Thin shut lines follow the doors and meet the sill trim.
+        rod(b.trim,[sideX,top-0.077,z],[sideX,bottom,z-0.063],0.0045,0x23282b,4);
+      }
+      box(b.trim,[0.012,0.035,van?2.9:1.75],[side*(w+0.004),top-0.30,van?-0.30:-0.09],rubber);
       const x = side * w * 0.70;
+      if (estate) {
+        rod(b.trim,[side*0.57,1.69,-1.80],[side*0.57,1.69,0.21],0.018,0x727776,6);
+        for (const z of [-1.73,0.16])box(b.trim,[0.035,0.050,0.080],[side*0.57,1.665,z],black);
+      }
       if (cab) {
         roundFace(b.trim, 0.168, 0.080, [x, top - 0.37, end - 0.015], chrome);
         roundFace(b.lights, 0.134, 0.047, [x, top - 0.37, end + 0.028], 0xffeece);
       } else {
         box(b.trim, [0.34, 0.132, 0.073], [x, top - 0.34, end - 0.015], black, side * 0.13);
         box(b.lights, [0.30, 0.077, 0.045], [x, top - 0.34, end + 0.02], 0xeaf4ff, side * 0.13);
+        box(b.lights,[0.246,0.012,0.010],[x,top-0.312,end+0.047],0xffffff,side*0.13);
+        box(b.lights,[0.044,0.033,0.011],[x+side*0.114,top-0.352,end+0.049],0xdcb17c,side*0.13);
       }
       box(b.trim, [0.24, 0.18, 0.055], [x, top - 0.31, -end], black);
       box(rearLights, [0.20, 0.083, 0.042], [x, top - 0.30, -end - 0.033], 0xe3262c);
@@ -202,6 +240,11 @@ function createCityModels(THREE, mergeGeometries, time) {
     for (const dir of [-1, 1]) {
       box(b.trim, [w * 1.62, 0.096, 0.097], [0, radius + 0.08, dir * (end - 0.012)], rubber);
       plate(b.trim, dir * (end + 0.045), top - 0.46 - (dir > 0 ? 0.15 : 0), 0.43);
+    }
+    box(b.trim,[w*1.25,0.046,0.028],[0,radius+0.182,end+0.014],0x394044);
+    for(const side of [-1,1]){
+      box(b.trim,[0.27,0.069,0.024],[side*w*0.64,radius+0.13,end+0.022],black);
+      box(b.trim,[0.075,0.055,0.063],[side*w*0.57,radius+0.104,-end-0.026],0x6e7474);
     }
     if (cab) {
       box(b.trim, [0.51, 0.11, 0.25], [0, 2.03, 0.29], black);
@@ -236,6 +279,7 @@ function createCityModels(THREE, mergeGeometries, time) {
           const z = from + step * (i + 0.5);
           box(b.trim, [0.023, 0.79, step - 0.075], [side * w, height, z], black);
           box(b.glass, [0.022, 0.72, step - 0.14], [side * (w + 0.014), height + 0.012, z]);
+          box(b.trim,[0.017,0.024,step-0.14],[side*(w+0.029),height+0.242,z],0x515456);
         }
       }
       box(b.trim, [0.018, 0.105, upperFront - rear - 0.62], [side * (w + 0.008), 2.51, (upperFront + rear) / 2], classic ? cream : black);
@@ -245,6 +289,7 @@ function createCityModels(THREE, mergeGeometries, time) {
       box(b.trim, [0.069, 0.185, 0.015], [side * (w + 0.22), 1.97, mirror - 0.071], chrome);
       roundFace(b.trim, 0.154, 0.075, [side * 0.91, 0.81, nose - 0.01], black);
       roundFace(b.lights, 0.116, 0.043, [side * 0.91, 0.81, nose + 0.028], 0xffedcf);
+      roundFace(b.lights,0.049,0.032,[side*1.05,0.63,nose+0.021],0xdc9d54);
       box(b.lights, [0.19, 0.105, 0.05], [side * 0.87, 0.98, rear - 0.025], 0xe3262c);
       box(b.trim, [0.19, 0.055, 0.05], [side * 0.87, 0.85, rear - 0.025], 0xcb8430);
       busPane(b.glass, side * 0.52, 3.42, upperFront + 0.014, 0.96, 0.66);
@@ -269,11 +314,15 @@ function createCityModels(THREE, mergeGeometries, time) {
       busPane(b.glass, -0.60, 1.75, -4.26, 0.83, 0.55);
     } else {
       busPane(b.glass, 0, 1.83, nose + 0.014, 1.92, 0.79);
+      box(b.trim,[0.032,0.73,0.016],[0,1.84,nose+0.019],black);
+      box(b.trim,[0.70,0.095,0.035],[0,0.815,nose+0.024],black);
       for (const z of [nose - 0.84, rear + 0.95]) {
         box(b.trim, [0.025, 1.72, 0.84], [w + 0.022, 1.36, z], black);
         for (const d of [-0.20, 0.20]) box(b.glass, [0.019, 1.30, 0.33], [w + 0.039, 1.47, z + d]);
       }
     }
+    const ventZ=rear+0.125;
+    for(let i=0;i<6;i++)box(b.trim,[classic?0.76:1.43,0.021,0.037],[classic?-0.53:0,0.91+i*0.063,ventZ-0.143],0x292f30);
     box(b.trim, [w * 1.89, 0.14, 0.15], [0, 0.51, nose - 0.03], rubber);
     plate(b.trim, nose + 0.057, 0.50, 0.46);
     plate(b.trim, rear - 0.052, 0.52, 0.46);
@@ -283,8 +332,9 @@ function createCityModels(THREE, mergeGeometries, time) {
     const heavy = kind === 'bus' || kind === 'routemaster';
     const classic = kind === 'routemaster';
     const axles = classic ? [-1.85, 2.75] : kind === 'bus' ? [-3.40, 3.80] :
-      kind === 'van' ? [-1.70, 1.70] : kind === 'cab' ? [-1.44, 1.44] : [-1.38, 1.35];
-    const radius = heavy ? 0.50 : kind === 'car' ? 0.32 : 0.36;
+      kind === 'van' ? [-1.70, 1.70] : kind === 'cab' ? [-1.44, 1.44] :
+      kind === 'estate' ? [-1.52,1.46] : kind === 'saloon' ? [-1.47,1.37] : [-1.38, 1.35];
+    const radius = heavy ? 0.50 : kind === 'car' ? 0.32 : kind === 'saloon' || kind === 'estate' ? 0.34 : 0.36;
     const track = heavy ? 1.08 : kind === 'van' ? 0.87 : kind === 'cab' ? 0.82 : 0.77;
     const b = {paint: geometryBatch(), trim: geometryBatch(), glass: geometryBatch(), lights: geometryBatch()};
     const rearLights = !heavy && separateBrakeLights ? geometryBatch() : b.lights;
@@ -322,6 +372,10 @@ function createCityModels(THREE, mergeGeometries, time) {
       const lens = geometryBatch();
       box(lens,[0.44,0.084,0.209],[side*0.27,1.628,-0.29],0x467dd8);
       box(lens,[0.045,0.068,0.214],[side*0.487,1.628,-0.29],0x8fbcf2);
+      for (const offset of [0,0.12,0.24]) {
+        box(lens,[0.072,0.037,0.008],[side*(0.142+offset),1.631,-0.398],0x92b3e6);
+        box(lens,[0.072,0.037,0.008],[side*(0.142+offset),1.631,-0.182],0x92b3e6);
+      }
       lenses.push(lens.finish());
     }
     return {trim:trim.finish(),lenses};
@@ -331,7 +385,8 @@ function createCityModels(THREE, mergeGeometries, time) {
     return {
       paint: new THREE.MeshPhysicalMaterial({vertexColors: true, roughness: 0.34, metalness: 0.27, clearcoat: 0.48, clearcoatRoughness: 0.25}),
       trim: new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.67, metalness: 0.12}),
-      glass: new THREE.MeshStandardMaterial({vertexColors: true, color: 0x293942, roughness: 0.24, metalness: 0.53, side: THREE.FrontSide}),
+      glass: new THREE.MeshPhysicalMaterial({vertexColors: true, color: 0x26343b, roughness: 0.26, metalness: 0.29,
+        clearcoat: 0.75, clearcoatRoughness: 0.16, side: THREE.FrontSide}),
       lights: new THREE.MeshBasicMaterial({vertexColors: true}),
     };
   }
@@ -354,10 +409,22 @@ function createCityModels(THREE, mergeGeometries, time) {
     box(trim, [0.15, 0.054, 0.25], [0, 0.895, -0.35], black);
     box(trim, [0.13, 0.039, 0.25], [0, 0.70, -0.63], rubber);
     box(trim, [0.075, 0.046, 0.025], [0, 0.70, -0.768], 0xbd1d27);
+    const mudguard = (batch, offset, tint) => {
+      const points=Array.from({length:9},(_,i)=>{
+        const angle=(i/8-0.5)*2.05;
+        return new THREE.Vector3(0,y+Math.cos(angle)*0.365,offset+Math.sin(angle)*0.365);
+      });
+      batch.add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),10,0.018,5,false),tint);
+    };
+    mudguard(trim,rearZ,rubber);
+    mudguard(fork,frontZ-steerer,rubber);
+    rod(trim,[0.06,y,rearZ],[0.08,0.39,-0.12],0.017,0x444c4b,6);
+    trim.add(new THREE.CylinderGeometry(0.104,0.104,0.025,14).rotateZ(Math.PI/2).translate(0.07,0.39,-0.12),0x596362);
     for (const side of [-1, 1]) {
       rod(fork, [side * 0.055, y, frontZ - steerer], [side * 0.046, 0.76, 0], 0.024, chrome);
       rod(fork, [0, 1.035, -0.045], [side * 0.20, 1.045, -0.09], 0.014, chrome);
       rod(fork, [side * 0.20, 1.045, -0.09], [side * 0.286, 1.045, -0.132], 0.021, rubber);
+      rod(fork,[side*0.205,1.035,-0.084],[side*0.268,1.017,-0.052],0.010,black,5);
       box(fork, [0.024, 0.13, 0.22], [side * 0.14, 0.895, 0.154], black);
     }
     rod(fork, [0, 0.71, 0.035], [0, 1.035, -0.045], 0.025, chrome);

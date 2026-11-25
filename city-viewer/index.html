@@ -380,8 +380,8 @@ Object.assign(I18N.en,{saveGame:'Save game',loadGame:'Load saved game',saved:'Pr
 Object.assign(I18N.zh,{saveGame:'保存游戏',loadGame:'读取存档',saved:'进度已保存在此浏览器。',loaded:'已读取存档。',saveFailed:'无法保存，请先检查浏览器存储再退出。',noSave:'未找到兼容的存档。',loadFailed:'无法恢复此存档。',resetBindings:'恢复默认快捷键',bindingTip:'点击按键后按下新键。Esc 取消，已占用的键无法重复绑定。',pressKey:'请按下新键…',keyConflict:'此键已被占用，请选择其他键。',keyInvalid:'请选择字母、数字、方向键、Shift、Ctrl、空格、回车或标点键。',bindingSaved:'快捷键已保存。',bindingFailed:'无法保存快捷键，浏览器存储不可用。',mouseHelp:'鼠标：拖动观察或环绕 · 滚轮缩放 / 飞行速度 · 点击小地图移动。Esc 固定打开菜单。',loadStreet:'读取 GTA 存档',loadSightseeing:'读取观光存档',resumeHint:'选择同一模式立即继续；切换模式时重新加载地图。'});
 Object.assign(I18N.en,{nearbyVehicles:'Nearby vehicles',noNearbyVehicle:'No accessible vehicle within 6 m',noExitSpace:'No clear space to get out',vehiclePickHint:(enter,previous,next)=>`${enter} enter · ${previous}/${next} or wheel to select`});
 Object.assign(I18N.zh,{nearbyVehicles:'附近载具',noNearbyVehicle:'6 米内没有可接近的载具',noExitSpace:'车旁没有安全的下车空间',vehiclePickHint:(enter,previous,next)=>`${enter} 上车 · ${previous}/${next} 或滚轮选择`});
-Object.assign(I18N.en,{newStreet:'New game',streetSaveDetail:(date,passed,money)=>`${date} · ${passed} completed · £${money}`});
-Object.assign(I18N.zh,{newStreet:'开始新游戏',streetSaveDetail:(date,passed,money)=>`${date} · 已完成 ${passed} 个任务 · £${money}`});
+Object.assign(I18N.en,{newStreet:'New game',car_saloon:'Saloon',car_estate:'Estate car',streetSaveDetail:(date,passed,money)=>`${date} · ${passed} completed · £${money}`});
+Object.assign(I18N.zh,{newStreet:'开始新游戏',car_saloon:'三厢轿车',car_estate:'旅行车',streetSaveDetail:(date,passed,money)=>`${date} · 已完成 ${passed} 个任务 · £${money}`});
 let LANG='en';
 const QS=new URLSearchParams(location.search);if(QS.get('lang')==='zh'||QS.get('lang')==='en')LANG=QS.get('lang');
 const requestedMode=QS.get('mode'), requestedActivity=QS.get('play');
@@ -1237,10 +1237,13 @@ function buildLife(){
   const pickEdge=(G,minLen)=>{for(let t=0;t<50;t++){const e=G.edges[Math.floor(rand()*G.edges.length)];if(e.len>minLen&&Math.hypot(e.pts[0][0],e.pts[0][1])<RAD)return e;}return G.edges[0];};
   for(const G of [CARG,PEDG])for(const e of G.edges){const m=e.pts[Math.floor(e.pts.length/2)];e.mx=m[0];e.mz=m[1];}
   buildBikeStations();
-  const kinds=[['routemaster',22],['bus',14],['cab',90],['car',120],['van',30],['bike',11]];
+  // Append new families to preserve original traffic IDs used in saved Street runs.
+  const kinds=[['routemaster',22],['bus',14],['cab',90],['car',120],['van',30],['bike',11],['saloon',33],['estate',27]];
   const paint={cab:()=>[0.035,0.035,0.043],bus:()=>[0.72,0.04,0.04],routemaster:()=>[0.64,0.025,0.018],
     van:()=>pick([[0.92,0.92,0.92],[0.88,0.88,0.86],[0.2,0.22,0.25]]),
     car:()=>pick([[0.75,0.76,0.78],[0.9,0.9,0.92],[0.05,0.05,0.06],[0.15,0.2,0.35],[0.5,0.05,0.05],[0.35,0.36,0.38],[0.1,0.25,0.18]]),
+    saloon:()=>pick([[0.09,0.12,0.18],[0.54,0.55,0.57],[0.19,0.08,0.10],[0.30,0.27,0.22]]),
+    estate:()=>pick([[0.43,0.47,0.50],[0.19,0.27,0.22],[0.12,0.15,0.20],[0.52,0.46,0.34]]),
     bike:()=>pick([[0.035,0.30,0.31],[0.52,0.045,0.025],[0.10,0.17,0.36]])};
   for(const [k,n] of kinds){
     const model=k==='bike'?bikeModel:cityModels.vehicle(k),list=[];
@@ -1698,6 +1701,8 @@ const CARS={
   car:{len:4.4,length:4.55,width:2.25,acc:8.5,max:36,rev:9,wheelbase:2.73,cam:[7,2.8],hood:[0.3,1.3],look:1.4,paint:0x1d4f9c},
   routemaster:{len:8.6,length:8.82,width:3.16,acc:3.2,max:17,rev:5,wheelbase:4.60,cam:[13,5.2],hood:[3.4,3.75],look:2.3,paint:0xd62421},
   van:{len:5.3,length:5.48,width:2.47,acc:5.8,max:28,rev:7,wheelbase:3.40,cam:[8.3,3.4],hood:[0.42,1.73],look:1.6,paint:0xb7babf},
+  saloon:{len:4.76,length:4.92,width:2.30,acc:9,max:38,rev:9,wheelbase:2.84,cam:[7.4,2.85],hood:[0.36,1.28],look:1.4,paint:0x434f69},
+  estate:{len:4.96,length:5.12,width:2.30,acc:7.7,max:33,rev:8,wheelbase:2.98,cam:[7.8,3.1],hood:[0.34,1.48],look:1.5,paint:0x56695d},
   bus:{len:11.2,length:11.4,width:3.21,acc:3.0,max:17,rev:4,wheelbase:7.20,cam:[15,5.5],hood:[4.9,3.67],look:2.3,paint:0xd62421},
   bike:{len:2.0,length:2.04,width:0.88,acc:3.7,max:8.5,rev:1.5,wheelbase:1.26,cam:[4.4,2.35],hood:[0.13,1.59],look:1.13,paint:0x188e91},
 };

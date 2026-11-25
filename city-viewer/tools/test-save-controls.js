@@ -43,6 +43,17 @@ test('separate mode saves survive serialization with mission progress intact', a
   assert.equal(readSave('street', db).missions.state, 'escape');
 });
 
+test('new saloon and estate body types survive a save and restore', async () => {
+  const { readSave, writeSave } = await import('../js/savegame.js');
+  const db = storage();
+  const street = snapshot();
+  street.car = { ...street.car, kind: 'estate', colour: 0x56695d };
+  street.streetParked = [{ ...street.car, kind: 'saloon' }];
+  writeSave(street, db);
+  assert.equal(readSave('street', db).car.kind, 'estate');
+  assert.equal(readSave('street', db).streetParked[0].kind, 'saloon');
+});
+
 test('corrupt and incompatible saves are rejected before touching live state', async () => {
   const { readSave, writeSave } = await import('../js/savegame.js');
   const db = storage(), valid = writeSave(snapshot(), db);
