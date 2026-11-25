@@ -135,9 +135,13 @@ export class DrivableCar {
     const start = {x:p.x,z:p.z,yaw:headingBefore};
     const radius = Math.hypot(this.length,this.width)/2;
     const result = CityTraffic.sweep(start, dx, dz, this.heading-headingBefore, radius, blocked);
-    this.mesh.rotation.y = result.pose.yaw;
-    p.x = result.pose.x;
-    p.z = result.pose.z;
+    const boxAt = ({x,z,yaw}) => this.footprint(x,z,yaw);
+    const contact = this.resolvePedestrianMove?.(start,result.pose,radius,boxAt);
+    const pose = contact?.pose ?? result.pose;
+    this.mesh.rotation.y = pose.yaw;
+    p.x = pose.x;
+    p.z = pose.z;
+    if (contact?.hit) { this.velocity.set(0,0,0); return false; }
     if (!result.hit) return false;
 
     const impact = this.velocity.length();
@@ -146,8 +150,10 @@ export class DrivableCar {
       if (Math.abs(x)+Math.abs(z)<0.001) continue;
       const slide = CityTraffic.sweep(result.pose,x,z,0,radius,blocked);
       if (slide.hit) continue;
-      p.x = slide.pose.x;
-      p.z = slide.pose.z;
+      const sideContact = this.resolvePedestrianMove?.(result.pose,slide.pose,radius,boxAt);
+      p.x = sideContact?.pose.x ?? slide.pose.x;
+      p.z = sideContact?.pose.z ?? slide.pose.z;
+      if (sideContact?.hit) { this.velocity.set(0,0,0); return impact > 5; }
       if (x) this.velocity.z *= -0.2;
       else this.velocity.x *= -0.2;
       this.velocity.multiplyScalar(0.97);

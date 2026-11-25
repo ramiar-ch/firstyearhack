@@ -164,11 +164,13 @@
       <button type="button" data-launch="street" class="launch-primary"><strong data-i18n="streetMode">Street Missions</strong><span data-i18n="streetModeDesc">Deliveries, pursuits and local two-player play.</span></button>
       <button type="button" data-launch="sightseeing"><strong data-i18n="sightseeingMode">Sightseeing</strong><span data-i18n="sightseeingModeDesc">Explore London on foot, by vehicle or from the air.</span></button>
       <button type="button" data-load="sightseeing" hidden>Load Sightseeing save</button>
+      <button type="button" data-delete="sightseeing" data-i18n="deleteSightseeingSave" hidden>Delete Sightseeing save</button>
     </div>
     <section class="launch-choices" id="street-save-choices" aria-labelledby="street-save-title" hidden>
       <h2 id="street-save-title" data-i18n="streetMode" tabindex="-1">Street Missions</h2>
       <button id="continue-street" type="button" data-i18n="resume" hidden>Resume</button>
       <button type="button" data-load="street" class="launch-primary" hidden><strong data-i18n="loadGame">Load saved game</strong><span class="save-detail"></span></button>
+      <button type="button" data-delete="street" data-i18n="deleteGame" hidden>Delete saved game</button>
       <button id="new-street" type="button" data-i18n="newStreet">New game</button>
       <button id="back-to-modes" type="button" data-i18n="back">Back</button>
     </section>
@@ -218,6 +220,7 @@ if(location.protocol==='file:'){
       <button type="button" id="open-settings" data-i18n="settings">Settings</button>
       <button type="button" id="save-game" data-i18n="saveGame">Save game</button>
       <button type="button" id="load-game" data-i18n="loadGame" disabled>Load saved game</button>
+      <button type="button" id="delete-game" data-delete="active" data-i18n="deleteGame" disabled>Delete saved game</button>
       <button type="button" id="return-title" data-i18n="backToStart">Main menu</button>
       <button type="button" id="quit-game" data-i18n="quitGame">Exit game</button>
     </div>
@@ -329,7 +332,7 @@ import * as Views from './js/views.js';
 import * as Hud from './js/hud.js';
 import { loadSettings, applyToSource } from './js/settings.js';
 import { ACTIONS, defaultBindings, normalizeBindings, translateKey, keyLabel, allowedKey } from './js/keybindings.js';
-import { readSave, writeSave } from './js/savegame.js';
+import { readSave, writeSave, deleteSave } from './js/savegame.js';
 import { VEHICLE_REACH, nearbyVehicles, selectedVehicle } from './game/nearbyVehicles.js';
 
 /* =========================================================
@@ -384,6 +387,8 @@ Object.assign(I18N.en,{nearbyVehicles:'Nearby vehicles',noNearbyVehicle:'No acce
 Object.assign(I18N.zh,{nearbyVehicles:'附近载具',noNearbyVehicle:'6 米内没有可接近的载具',noExitSpace:'车旁没有安全的下车空间',vehiclePickHint:(enter,previous,next)=>`${enter} 上车 · ${previous}/${next} 或滚轮选择`});
 Object.assign(I18N.en,{newStreet:'New game',car_saloon:'Saloon',car_estate:'Estate car',streetSaveDetail:(date,passed,money)=>`${date} · ${passed} completed · £${money}`});
 Object.assign(I18N.zh,{newStreet:'开始新游戏',car_saloon:'三厢轿车',car_estate:'旅行车',streetSaveDetail:(date,passed,money)=>`${date} · 已完成 ${passed} 个任务 · £${money}`});
+Object.assign(I18N.en,{deleteGame:'Delete saved game',deleteSightseeingSave:'Delete Sightseeing save',confirmDeleteSave:name=>`Permanently delete the ${name} save from this browser?`,saveDeleted:'Saved game deleted.',deleteSaveFailed:'Could not delete the save. Check browser storage.'});
+Object.assign(I18N.zh,{deleteGame:'删除存档',deleteSightseeingSave:'删除观光存档',confirmDeleteSave:name=>`要从此浏览器永久删除「${name}」的存档吗？`,saveDeleted:'存档已删除。',deleteSaveFailed:'无法删除存档，请检查浏览器存储。'});
 let LANG='en';
 const QS=new URLSearchParams(location.search);if(QS.get('lang')==='zh'||QS.get('lang')==='en')LANG=QS.get('lang');
 const requestedMode=QS.get('mode'), requestedActivity=QS.get('play');
@@ -1292,6 +1297,7 @@ function edgeAt(e,s,o){s=clamp(s,0,e.len);let i=1;while(i<e.cum.length-1&&e.cum[
 let CARG,PEDG;
 const vehicles=[],peds=[],VT={},bikeStations=[];
 const vehicleSpace=CityTraffic.createSpace();
+const pedestrianSpace=CityTraffic.createSpace(6,(box,p)=>CityTraffic.circleOverlap(box,p.x,p.z,p.hw));
 const cityModels=createCityModels(THREE,mergeGeometries,uTime);
 const vehicleMaterials=cityModels.vehicleMaterials();
 ENVMATS.push(vehicleMaterials.paint,vehicleMaterials.glass);
@@ -1311,6 +1317,7 @@ const lifeViews=Array.from({length:4},()=>({frustum:new THREE.Frustum(),camera:n
 let lifeViewCount=1;
 const pedBounds=new THREE.Sphere(new THREE.Vector3(),2);
 const vehicleBounds=new THREE.Sphere(new THREE.Vector3(),6);
+const recycleBounds=new THREE.Sphere(new THREE.Vector3(),16);
 const pedMeshes={};
 function updateInstanceAttribute(attribute,count){
   if(!count)return;
@@ -1361,6 +1368,11 @@ function lifeVisibility(bounds,near,far=Infinity){
     if(distance<near||view.frustum.intersectsSphere(bounds))visible=true;
   }
   return visible?closest:Infinity;
+}
+function visibleForRecycling(x,z){
+  recycleBounds.center.set(x,2,z);
+  for(let i=0;i<lifeViewCount;i++)if(lifeViews[i].frustum.intersectsSphere(recycleBounds))return true;
+  return false;
 }
 function addPedInstance(p,x,y,z){
   pedBounds.center.set(x,y+0.9,z);
@@ -1435,10 +1447,12 @@ function buildLife(){
     let selection=styleRandom();
     const profile=PED_PROFILES.find(profile=>(selection-=profile.weight)<0)||PED_PROFILES[0];
     const vary=range=>lerp(...range,styleRandom());
-    peds.push({e,fwd:rand()<0.5,s:rand()*e.len,v:vary(profile.speed),side:rand()<0.5?1:-1,
+    const p={e,fwd:rand()<0.5,s:rand()*e.len,v:vary(profile.speed),side:rand()<0.5?1:-1,
       off:rr(0.8,2.2),phase:rand()*Math.PI*2,height:vary(profile.height),width:vary(profile.width),style:profile.style,
       stoop:profile.stoop*(0.65+styleRandom()*0.60),
-      coat:profile.style==='worker'?new THREE.Color(0x95864b):style(coats),skin:style(skins),trousers:style(trousers)});
+      coat:profile.style==='worker'?new THREE.Color(0x95864b):style(coats),skin:style(skins),trousers:style(trousers)};
+    p.radius=0.27*p.width;
+    peds.push(p);
   }
   buildPedMeshes();
 }
@@ -1486,6 +1500,35 @@ function setActorPose(v,pose){
   v.px=pose.x;v.pz=pose.z;v.yaw=pose.yaw;
   vehicleSpace.place(v,actorBox(v.k,pose));
 }
+function pedestrianBox(p,x=p.x,z=p.z){
+  const r=p.radius;
+  return {x,z,fx:0,fz:1,hw:r,hl:r,ex:r,ez:r};
+}
+function playerAtPedestrian(p,x,z){
+  return mode==='walk'&&Players.players.some(({pos})=>(pos.x-x)**2+(pos.z-z)**2<(p.radius+0.3)**2);
+}
+function pedestrianPathClear(p,x,z){
+  const dx=x-p.x,dz=z-p.z,steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/0.16));
+  for(let i=1;i<=steps;i++){
+    const px=p.x+dx*i/steps,pz=p.z+dz*i/steps;
+    if(blockedAt(px,pz)||collideCircle(px,pz,p.radius).hit)return false;
+  }
+  const box=pedestrianBox(p,x,z);
+  return !vehicleSpace.hit(box)&&!pedestrianSpace.hit(box,p)&&!playerAtPedestrian(p,x,z);
+}
+function pushPedestrian(p,box,previous){
+  const next=CityTraffic.pedestrianEgress(p,box,p.radius,(x,z)=>
+    !CityTraffic.circleOverlap(previous,x,z,p.radius)&&pedestrianPathClear(p,x,z));
+  if(!next)return false;
+  p.yaw=Math.atan2(next.x-p.x,next.z-p.z);
+  p.x=next.x;p.z=next.z;
+  p.pushed={routeX:p.pushed?.routeX??p.routeX,routeZ:p.pushed?.routeZ??p.routeZ,stumble:0.26};
+  pedestrianSpace.place(p,pedestrianBox(p));
+  return true;
+}
+function resolvePedestrianMove(start,end,radius,boxAt){
+  return lifeRoot.visible?CityTraffic.sweepPedestrians(start,end,radius,boxAt,pedestrianSpace,pushPedestrian):{pose:end,hit:null};
+}
 function roadGround(r,x,z){
   return (r?.surfaceY??0)+0.006+(r?.bridge&&isWaterRaw(x,z)?0.04:0);
 }
@@ -1498,13 +1541,16 @@ function driveGround(x,z){
 }
 function setLifeVisibility(visible){
   lifeRoot.visible=visible;
+  if(!visible)for(const p of peds){
+    pedestrianSpace.remove(p);
+    p.x=p.z=p.yaw=undefined;p.pushed=null;
+  }
   for(const v of vehicles){
     if(v.station||v.held)continue;
     if(!visible){vehicleSpace.remove(v);continue;}
     const pose={x:v.px,z:v.pz,yaw:v.yaw};
     if(!vehicleBlocked(v.k,pose,v)){setActorPose(v,pose);v.suppressed=false;continue;}
-    v.suppressed=!placeOnRoute(v,()=>nearEdge(CARG,v.px,v.pz,360,22,r=>permitsVehicle(v.k,r)),25);
-    if(!v.suppressed)v.parked=false;
+    v.suppressed=true;
   }
 }
 function travelLane(r){
@@ -1526,13 +1572,14 @@ function routePose(e,fwd,lane,s,kind){
   const offset=laneOffset(e.r,lane,kind);
   return {x:routePoint.x+tz*offset,z:routePoint.z-tx*offset,yaw:Math.atan2(tx,tz)};
 }
-function placeOnRoute(v,choose,attempts){
+function placeOnRoute(v,choose,attempts,acceptPose){
   for(let i=0;i<attempts;i++){
     const e=choose();
     if(!e||!permitsVehicle(v.k,e.r)||e.len<v.len+3)continue;
     const fwd=e.one?e.one===1:rand()<0.5,lane=travelLane(e.r);
     const margin=v.len*0.5+1,s=rr(margin,e.len-margin);
     const pose=routePose(e,fwd,lane,s,v.k);
+    if(acceptPose&&!acceptPose(pose))continue;
     if(vehicleBlocked(v.k,pose,v))continue;
     Object.assign(v,{e,fwd,lane,s,v:0,next:null,hold:0,stuck:0});
     setActorPose(v,pose);
@@ -1549,23 +1596,30 @@ function nearEdge(G,x,z,r,minLen,filter){
 }
 function streamLife(anchors,r){
   const near=(px,pz,range)=>anchors.some(p=>(px-p.x)**2+(pz-p.z)**2<range**2);
+  const canStream=(x,z)=>CityTraffic.canRecycle(x,z,anchors,140,visibleForRecycling);
   for(let k=0;k<22;k++){
     streamI=(streamI+1)%(vehicles.length+peds.length);
     const {x,z}=anchors[streamI%anchors.length];
     if(streamI<vehicles.length){
       const v=vehicles[streamI];
       if(v.held||v.station||(!v.e&&!v.parked))continue;
-      if(!v.suppressed&&near(v.px,v.pz,r*1.28))continue;
-      if(placeOnRoute(v,()=>nearEdge(CARG,x,z,r,isBus(v.k)?40:16,road=>permitsVehicle(v.k,road)),3)){
+      if(!v.suppressed&&(near(v.px,v.pz,r*1.28)||!canStream(v.px,v.pz)))continue;
+      if(placeOnRoute(v,()=>nearEdge(CARG,x,z,r,isBus(v.k)?40:16,road=>permitsVehicle(v.k,road)),3,
+        pose=>near(pose.x,pose.z,r)&&canStream(pose.x,pose.z)&&!pedestrianSpace.hit(actorBox(v.k,pose)))){
         v.parked=false;v.suppressed=false;
       }
     }else{
       const p=peds[streamI-vehicles.length];
-      edgeAt(p.e,p.s,_o);
-      if(near(_o.x,_o.z,r*1.1))continue;
+      if(p.pushed)continue;
+      edgeAt(p.e,p.fwd?p.s:p.e.len-p.s,_o);
+      if(near(p.x??_o.x,p.z??_o.z,r*1.1)||!canStream(p.x??_o.x,p.z??_o.z))continue;
       const e=nearEdge(PEDG,x,z,r,6);
       if(e&&!(e.r.kind==='foot'&&isBld(e.mx,e.mz))){
-        p.e=e;p.s=rand()*e.len;p.fwd=rand()<0.5;p.x=p.z=p.yaw=undefined;
+        const s=rand()*e.len,fwd=rand()<0.5;
+        edgeAt(e,fwd?s:e.len-s,_o);
+        if(!canStream(_o.x,_o.z))continue;
+        pedestrianSpace.remove(p);
+        Object.assign(p,{e,s,fwd,x:undefined,z:undefined,yaw:undefined,wait:0});
       }
     }
   }
@@ -1595,11 +1649,13 @@ function stepTraffic(v,targetSpeed,dt){
   const maxTurn=(v.k==='bike'?3.4:isBus(v.k)?1.35:2.15)*dt;
   const turn=clamp(angleDelta(v.yaw,next.yaw),-maxTurn,maxTurn);
   const start={x:v.px,z:v.pz,yaw:v.yaw};
-  const result=CityTraffic.sweep(start,dx*step,dz*step,turn,(v.len+CARS[v.k].width)/2,pose=>vehicleBlocked(v.k,pose,v));
-  setActorPose(v,result.pose);
-  v.travel=(v.travel||0)+Math.hypot(result.pose.x-start.x,result.pose.z-start.z);
+  const radius=Math.hypot(CARS[v.k].length,CARS[v.k].width)/2;
+  const result=CityTraffic.sweep(start,dx*step,dz*step,turn,radius,pose=>vehicleBlocked(v.k,pose,v));
+  const contact=resolvePedestrianMove(start,result.pose,radius,pose=>actorBox(v.k,pose));
+  setActorPose(v,contact.pose);
+  v.travel=(v.travel||0)+Math.hypot(contact.pose.x-start.x,contact.pose.z-start.z);
   v.steer=lerp(v.steer||0,clamp(turn*4,-0.4,0.4),0.30);
-  if(result.hit){
+  if(result.hit||contact.hit){
     v.v=0;
     v.stuck+=dt;
     if(v.stuck>1.5){v.next=null;v.stuck=0;v.hold=0.12+rand()*0.35;}
@@ -1614,7 +1670,7 @@ function stepTraffic(v,targetSpeed,dt){
 function updateTraffic(dt){
   const f=mode==='orbit'?controls.target:mode==='drive'&&DRIVE.group.visible?DRIVE:camera.position;
   const range=mode==='walk'?300:mode==='drive'?380:clamp((mode==='orbit'?camera.position.distanceTo(controls.target):camera.position.y)*2.5,420,2200);
-  const anchors=split?.on?[car.position,split.car2.position]:mode==='walk'?Players.players.map(p=>p.pos):[f];
+  const anchors=split?.on?[car.position,split.car2.position]:mode==='walk'?Players.players.map(p=>p.pos):[mode==='strand'&&car?car.position:f];
   streamLife(anchors.length?anchors:[f],range);
   const lanes=new Map();
   for(const v of vehicles){
@@ -1646,7 +1702,6 @@ function updateTraffic(dt){
   }
 }
 function updateLife(dt){
-  updateLifeViews();
   if(lifeRoot.visible){
     for(const {list,body,meshes} of Object.values(VT)){
       if(!body)continue;
@@ -1667,6 +1722,23 @@ function updateLife(dt){
     }
     for(const {mesh} of Object.values(pedMeshes).flat())mesh.count=0;
     for(const p of peds){
+      if(p.pushed){
+        const hit=p.pushed;
+        hit.stumble=Math.max(0,hit.stumble-dt);
+        const dx=hit.routeX-p.x,dz=hit.routeZ-p.z,distance=Math.hypot(dx,dz);
+        p.walking=hit.stumble>0;
+        if(!hit.stumble&&distance>0){
+          const step=Math.min(1,1.2*dt/distance),x=p.x+dx*step,z=p.z+dz*step;
+          if(pedestrianPathClear(p,x,z)){
+            p.x=x;p.z=z;p.walking=true;
+            p.yaw+=angleDelta(p.yaw,Math.atan2(dx,dz))*Math.min(1,dt*10);
+            pedestrianSpace.place(p,pedestrianBox(p));
+          }
+        }
+        if(Math.hypot(hit.routeX-p.x,hit.routeZ-p.z)<0.015)p.pushed=null;
+        addPedInstance(p,p.x,p.y,p.z);
+        continue;
+      }
       let e=p.e,fwd=p.fwd,s=p.s+p.v*dt;
       if(s>=e.len){
         const node=fwd?e.b:e.a,n=nextEdge(PEDG,node,e);
@@ -1677,11 +1749,15 @@ function updateLife(dt){
       const tx=fwd?_o.tx:-_o.tx,tz=fwd?_o.tz:-_o.tz,r=e.r;
       const lo=r.kind==='car'?(r.w/2+p.off)*p.side:p.side*Math.min(p.off*0.5,r.w/2-0.3);
       const x=_o.x+tz*lo,z=_o.z-tx*lo,yaw=Math.atan2(tx,tz);
-      p.walking=!walkOccupied(x,z)&&!isBld(x,z)&&!isWater(x,z);
+      const box=pedestrianBox(p,x,z);
+      p.walking=!vehicleSpace.hit(box)&&!pedestrianSpace.hit(box,p)&&!playerAtPedestrian(p,x,z)&&
+        !blockedAt(x,z)&&!collideCircle(x,z,p.radius).hit;
       const y=r.kind==='car'?0.07:0.03;
       if(p.walking){
         p.wait=0;
         p.x=x;p.z=z;p.y=y;p.s=s;p.e=e;p.fwd=fwd;
+        p.routeX=x;p.routeZ=z;
+        pedestrianSpace.place(p,box);
         p.yaw=(p.yaw??yaw)+angleDelta(p.yaw??yaw,yaw)*Math.min(1,dt*12);
       }else if(p.x===undefined){
         p.s=s;p.e=e;p.fwd=fwd;
@@ -1780,7 +1856,15 @@ let player=null;
 let flySpeed=30,orbitAnim=null,labelsOn=true,fogOn=true,bloomOn=true;
 const key=c=>kbSource.key(c);
 const blockedAt=(x,z)=>isBld(x,z)||isWater(x,z)||Math.hypot(x,z)>RH-30;
-function moveWalk(p,dx,dz){const o=collideCircle(p.x+dx,p.z+dz,0.3);if(isWater(o.x,o.z)||Math.hypot(o.x,o.z)>RH-30||walkOccupied(o.x,o.z))return;p.x=o.x;p.z=o.z;}
+function moveWalk(p,dx,dz){
+  if(!dx&&!dz)return;
+  const o=collideCircle(p.x+dx,p.z+dz,0.3);
+  if(blockedAt(o.x,o.z)||walkOccupied(o.x,o.z))return;
+  const yaw=Math.atan2(dx,dz);
+  const {pose}=resolvePedestrianMove({x:p.x,z:p.z,yaw},{x:o.x,z:o.z,yaw},0.43,
+    next=>CityTraffic.footprint(next.x,next.z,next.yaw,0.6,0.6));
+  p.x=pose.x;p.z=pose.z;
+}
 Players.init({clamp,lerp,moveWalk,freeSpot:null,sharedCamera:camera,scene});
 ChaseCam.init({clamp});
 Views.init({sharedCamera:camera});
@@ -1788,7 +1872,15 @@ player=Players.seedPrimary(kbSource,playerInput,camera);
 const padSources=new Map();
 let playSpawned=false;
 let mapCam=null;
-function freeSpot(x,z){for(let r=0;r<300;r+=2)for(let a=0;a<6.28;a+=0.4){const px=x+Math.cos(a)*r,pz=z+Math.sin(a)*r;if(!blockedAt(px,pz)&&!walkOccupied(px,pz)&&!blockedAt(px+0.6,pz)&&!blockedAt(px-0.6,pz)&&!blockedAt(px,pz+0.6)&&!blockedAt(px,pz-0.6))return new THREE.Vector3(px,0,pz);}return new THREE.Vector3(x,0,z);}
+function freeSpot(x,z){
+  for(let r=0;r<300;r+=2)for(let a=0;a<6.28;a+=0.4){
+    const px=x+Math.cos(a)*r,pz=z+Math.sin(a)*r;
+    if(blockedAt(px,pz)||walkOccupied(px,pz)||pedestrianSpace.hit(CityTraffic.footprint(px,pz,0,0.6,0.6)))continue;
+    if(blockedAt(px+0.6,pz)||blockedAt(px-0.6,pz)||blockedAt(px,pz+0.6)||blockedAt(px,pz-0.6))continue;
+    return new THREE.Vector3(px,0,pz);
+  }
+  return new THREE.Vector3(x,0,z);
+}
 Players.init({clamp,lerp,moveWalk,freeSpot,sharedCamera:camera,scene});
 function refreshViews(){
   Views.recompute(Players.players,innerWidth,innerHeight);
@@ -2151,7 +2243,7 @@ function freeVehiclePose(kind,x,z,ignore){
       const dir=f.r.oneway===-1?-1:1,tx=f.tx*dir,tz=f.tz*dir,yaw=Math.atan2(tx,tz),offset=laneOffset(f.r,1,kind);
       for(const lane of [offset,0,-offset]){
         const pose={x:f.px+tz*lane,z:f.pz-tx*lane,yaw};
-        if(!vehicleBlocked(kind,pose,ignore))return pose;
+        if(!vehicleBlocked(kind,pose,ignore)&&!pedestrianSpace.hit(actorBox(kind,pose)))return pose;
       }
     }
   }
@@ -2191,12 +2283,14 @@ function updateDrive(dt){
   const turn=vF/C.wheelbase*Math.tan(DRIVE.steer)*(brake&&!isBike?1.3:1)*dt;
   const fxStep=Math.sin(DRIVE.yaw+turn/2),fzStep=Math.cos(DRIVE.yaw+turn/2);
   const detect=p=>vehicleBlocked(DRIVE.kind,p,DRIVE);
-  const result=CityTraffic.sweep(DRIVE,(fxStep*vF+fzStep*vL)*dt,(fzStep*vF-fxStep*vL)*dt,turn,(C.length+C.width)/2,detect);
-  DRIVE.x=result.pose.x;DRIVE.z=result.pose.z;DRIVE.yaw=result.pose.yaw;
+  const radius=Math.hypot(C.length,C.width)/2;
+  const result=CityTraffic.sweep(DRIVE,(fxStep*vF+fzStep*vL)*dt,(fzStep*vF-fxStep*vL)*dt,turn,radius,detect);
+  const contact=resolvePedestrianMove(DRIVE,result.pose,radius,p=>actorBox(DRIVE.kind,p));
+  DRIVE.x=contact.pose.x;DRIVE.z=contact.pose.z;DRIVE.yaw=contact.pose.yaw;
   driveLook.followTurn(DRIVE.yaw-headingBefore);
   vehicleSpace.place(DRIVE,actorBox(DRIVE.kind,DRIVE));
   DRIVE.vx=(DRIVE.x-oldX)/dt;DRIVE.vz=(DRIVE.z-oldZ)/dt;
-  if(result.hit){DRIVE.vx*=0.16;DRIVE.vz*=0.16;}
+  if(result.hit||contact.hit){DRIVE.vx*=0.16;DRIVE.vz*=0.16;}
   if(typeof result.hit==='object'&&result.hit&&!result.hit.parked)result.hit.hold=0.45;
   const impact=result.hit?Math.abs(vF):0;
   DRIVE.bump=Math.max(DRIVE.bump*Math.exp(-dt*5),Math.min(1,impact/12));
@@ -2296,16 +2390,34 @@ function commitBindings(next){
   try{localStorage.setItem('kclCityBindings',JSON.stringify(next));bindings=next;kbSource.bindings=bindings;resetControls();capturingKey=null;renderBindings();document.getElementById('binding-status').textContent=i18n('bindingSaved');}
   catch(_){document.getElementById('binding-status').textContent=i18n('bindingFailed');}
 }
+let deletedActiveSave=false;
 function refreshSaveButtons(){
-  document.getElementById('load-game').disabled=!activity||!readSave(activity);
+  const saves={street:readSave('street'),sightseeing:readSave('sightseeing')};
+  document.getElementById('delete-game').disabled=document.getElementById('load-game').disabled=!saves[activity];
+  for(const button of document.querySelectorAll('#launcher [data-delete]'))button.hidden=!saves[button.dataset.delete];
   for(const button of document.querySelectorAll('[data-load]')){
-    const save=readSave(button.dataset.load);button.hidden=!save;
+    const save=saves[button.dataset.load];button.hidden=!save;
     const date=save?new Date(save.savedAt).toLocaleString(LANG==='zh'?'zh-CN':'en-GB'):'';
     if(button.dataset.load==='street'){
       button.querySelector('.save-detail').textContent=save?i18n('streetSaveDetail',date,save.missions.passed,save.missions.money):'';
     }else button.textContent=i18n('loadSightseeing')+(save?' · '+date:'');
   }
   document.getElementById('continue-street').hidden=!(inMainMenu&&activity==='street');
+}
+function deleteProgress(button){
+  const inPause=button.dataset.delete==='active';
+  const selected=inPause?activity:button.dataset.delete;
+  const name=i18n(selected==='street'?'streetMode':'sightseeingMode');
+  if(!window.confirm(i18n('confirmDeleteSave',name)))return;
+  const status=document.getElementById(inPause?'save-status':'launcher-status');
+  try{
+    deleteSave(selected);
+    if(selected===activity)deletedActiveSave=true;
+    refreshSaveButtons();
+    const next=inPause?'#save-game':selected==='street'?'#new-street':'[data-launch="sightseeing"]';
+    document.querySelector(next).focus();
+    status.textContent=i18n('saveDeleted');
+  }catch(e){console.warn('Delete failed',e);status.textContent=i18n('deleteSaveFailed');}
 }
 function showStreetSaves(show){
   const street=document.getElementById('street-save-choices');
@@ -2316,7 +2428,8 @@ function showStreetSaves(show){
   else document.querySelector('[data-launch="street"]').focus();
 }
 const carSnapshot=c=>c?{position:c.position.toArray(),heading:c.heading,velocity:c.velocity.toArray(),kind:c.kind,colour:c.mesh.userData.colour,sourceId:c.source?.id}:null;
-function saveProgress(){
+function saveProgress(automatic=false){
+  if(automatic&&deletedActiveSave)return true;
   try{
     writeSave({activity,mode,hours,timePlaying,timeSpeed,look:LOOK,camera:camera.position.toArray(),target:controls.target.toArray(),
       walker:{position:player.pos.toArray(),yaw:player.yaw,pitch:player.pitch,firstPerson:!!player.view?.firstPerson,distance:player.view?.distance??4.5},
@@ -2325,6 +2438,7 @@ function saveProgress(){
       streetParked:streetFleet.filter(c=>c!==car).map(carSnapshot),
       missions:missions?.snapshot(),wanted:wanted?{level:wanted.level,farTime:wanted.farTime,driver:warp.wanted}:null,
       patrols:squad.map(p=>p.active?{...carSnapshot(p.car),blocked:p.blocked,blockedRemaining:p.blockedRemaining??0}:null),report:report?.stats});
+    deletedActiveSave=false;
     document.getElementById('save-status').textContent=i18n('saved');refreshSaveButtons();return true;
   }catch(e){console.warn('Save failed',e);document.getElementById('save-status').textContent=i18n('saveFailed');return false;}
 }
@@ -2429,7 +2543,7 @@ function resumeGame(){
 function leaveSession(exit){
   if(!exit&&readyToPause){
     showPause();
-    const saved=saveProgress();
+    const saved=saveProgress(true);
     inMainMenu=true;readyToPause=false;startup='menu';
     pauseMenu.close();capturingKey=null;
     document.body.classList.add('in-main-menu');
@@ -2439,7 +2553,7 @@ function leaveSession(exit){
     document.querySelectorAll('[data-launch]').forEach(b=>{b.disabled=false;});
     refreshSaveButtons();return;
   }
-  if(exit&&readyToPause&&!saveProgress())return;
+  if(exit&&readyToPause&&!saveProgress(true))return;
   phone?.events.close();
   warp?.setPaused(true);
   window.speechSynthesis?.cancel();
@@ -2455,10 +2569,11 @@ function setupMenus(){
   document.querySelector('[data-launch="street"]').onclick=()=>showStreetSaves(true);
   document.querySelector('[data-launch="sightseeing"]').onclick=()=>startSession('sightseeing');
   document.querySelectorAll('[data-load]').forEach(button=>button.onclick=()=>startSession(button.dataset.load,true));
+  document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=()=>deleteProgress(button));
   document.getElementById('continue-street').onclick=()=>startSession('street');
   document.getElementById('new-street').onclick=()=>startSession('street',false,true);
   document.getElementById('back-to-modes').onclick=()=>showStreetSaves(false);
-  document.getElementById('save-game').onclick=saveProgress;
+  document.getElementById('save-game').onclick=()=>saveProgress();
   document.getElementById('load-game').onclick=loadProgress;
   document.getElementById('reset-bindings').onclick=()=>commitBindings(defaultBindings());
   document.getElementById('retry-loading').onclick=()=>location.reload();
@@ -2668,15 +2783,23 @@ function updateWeatherView(cam){
   }
 }
 
-function renderViews(dt){
+function updateWalkViews(dt){
+  if(mode!=='walk'||split?.on||!Players.players.length)return;
+  if(!Views.layout.length)refreshViews();
+  for(const {player:p,camera:cam} of Views.layout){
+    if(!p||!cam)continue;
+    p.view??=ChaseCam.createViewState(cam);
+    p.view.camera=cam;
+    ChaseCam.updateChaseCam(p,dt,blockedAt);
+  }
+}
+function renderViews(){
   const multi=Views.layout.length>1;
   renderer.autoClear=false;renderer.setScissorTest(multi);
   renderer.setViewport(0,0,innerWidth,innerHeight);renderer.clear();
   for(const v of Views.layout){
     if(v.sharedMap){renderSharedMap(v);continue;}
     const p=v.player;if(!p||!v.camera)continue;
-    if(!p.view)p.view=ChaseCam.createViewState(v.camera);p.view.camera=v.camera;
-    ChaseCam.updateChaseCam(p,dt,blockedAt);
     focusShadow(p,shadowBoxSide);
     const gl=Views.toWebGL(v,innerHeight);
     renderer.setViewport(gl.x,gl.y,gl.w,gl.h);
@@ -2717,19 +2840,16 @@ function renderScene(dt){
     placeShadow();
     split.render(camera,updateWeatherView);
   }else if(mode==='walk'&&Players.players.length){
-    if(!Views.layout.length)refreshViews();
     const multi=Views.layout.length>1;
     if(!multi&&(LOOK==='london'||(bloomOn&&night>0.08))){
       const p=Players.players[0];
-      if(p.view)p.view.camera=camera;
-      ChaseCam.updateChaseCam(p,dt,blockedAt);
       focusShadow(p,shadowBoxSide);
       updateWeatherView(camera);
       composer.render();
       labelRenderer.render(scene,camera);
       if((streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(p.pos.x,p.pos.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${p.pos.z<riverZ(p.pos.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;p._streetName=r.name;}else{el.style.display='none';p._streetName='';}}
     }else{
-      renderViews(dt);
+      renderViews();
       if(multi){for(const L of labels)L.o.visible=false;}
       else labelRenderer.render(scene,Views.layout[0]?.camera||camera);
     }
@@ -2743,7 +2863,7 @@ function renderScene(dt){
 function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const dt=Math.min(elapsed,0.05);
   if(inMainMenu)return;
   if(pauseMenu.open){
-    if(pausedViewDirty){pausedViewDirty=false;fitNear();updateWeatherView(camera);renderScene(0);}
+    if(pausedViewDirty){pausedViewDirty=false;fitNear();updateWalkViews(0);updateWeatherView(camera);renderScene(0);}
     return;
   }
   syncStreetObstacles();
@@ -2755,10 +2875,11 @@ function frame(){requestAnimationFrame(frame);const elapsed=clk.getDelta();const
   checkNearCar();
   updateMissions(dt);
   syncStreetObstacles();
-  if(lifeRoot.visible)updateTraffic(dt);
+  fitNear();
+  updateWalkViews(dt);
+  if(lifeRoot.visible){updateLifeViews();updateTraffic(dt);}
   updateLife(dt);
   for(const fn of MOD_HOOKS)fn(dt);
-  fitNear();
   updateWeatherView(camera);
   gradePass.uniforms.uTime.value=uTime.value;
   if((mode==='drive'||mode==='strand')&&(streetTick+=dt)>0.3){streetTick=0;const r=nearestRoad(camera.position.x,camera.position.z,26);const el=document.getElementById('street');if(r&&r.name){el.style.display='block';el.innerHTML=`${r.name}<small>${camera.position.z<riverZ(camera.position.x)?'WC2 · CITY OF WESTMINSTER':'SE1 · LAMBETH / SOUTHWARK'}</small>`;}else el.style.display='none';}
@@ -2812,8 +2933,11 @@ let nearbyList=[],nearbyId=null,nearbyTick=0;
 const pickerPoint=new THREE.Vector3();
 
 function registerStreetVehicle(c){
-  c.blockedAt=(x,z)=>strandCarBlocked(x,z)||!!roadblocks?.hits(x,z);
-  c.blockedBox=box=>staticVehicleBlocked(box)||!!vehicleSpace.hit(box,c,c.source);
+  if(!c.resolvePedestrianMove){
+    c.resolvePedestrianMove=resolvePedestrianMove;
+    c.blockedAt=(x,z)=>strandCarBlocked(x,z)||!!roadblocks?.hits(x,z);
+    c.blockedBox=box=>staticVehicleBlocked(box)||!!vehicleSpace.hit(box,c,c.source);
+  }
   vehicleSpace.place(c,c.footprint());
 }
 function syncStreetObstacles(){
@@ -2961,7 +3085,7 @@ function updateStrandCar(dt){
   if(solo)input.steer=driveLook.steer(dt,key('KeyW')&&input.throttle>0&&!input.brake&&!input.handbrake,input.steer);
   const others=squad.filter(p=>p.active).map(p=>p.car);
   if(split.on)others.push(split.car2);
-  if(car.update(dt,input,others)){showToast(i18n('crash'));sfx.crash();phone.haptic(HAPTICS.crash,0);report.log('crash',0);addStar(0);}
+  if(car.update(dt,input,others))reportPlayerCrash(car,0);
   vehicleSpace.place(car,car.footprint());
   driveLook.followTurn(car.heading-headingBefore);
   driveCam.update(dt,car,solo?driveLook:undefined,raycast);
@@ -3075,7 +3199,7 @@ function updateMissions(dt){
   const active=!intro&&(mode==='strand'||mode==='walk');     // paused in Orbit/Fly and during the intro
   const pos=mode==='walk'?player.pos:car.position;
   // P2 (split screen): drive their car, and they can do missions too.
-  if(split.on&&!intro&&split.update(dt,key,phone.getInput(1),car,squad.filter(p=>p.active).map(p=>p.car))){sfx.crash();phone.haptic(HAPTICS.crash,1);report.log('crash',1);addStar(1);}
+  if(split.on&&!intro&&split.update(dt,key,phone.getInput(1),car,squad.filter(p=>p.active).map(p=>p.car)))reportPlayerCrash(split.car2,1);
   updatePolice(dt);
   sfx.engine(car.speed,mode==='strand'&&!intro,warp.retro); // engine hum
   const d=new THREE.Vector3();camera.getWorldDirection(d);
@@ -3083,6 +3207,11 @@ function updateMissions(dt){
   if(!intro)warp.update(dt);
   swayHeld([car,split.car2],uTime.value); // scanned weapons sway on the car roofs
   document.body.classList.toggle('on-foot',mode==='walk'); // shows the weapon "in your hand"
+}
+function reportPlayerCrash(vehicle,driver){
+  if(driver===0)showToast(i18n('crash'));
+  sfx.crash();phone.haptic(HAPTICS.crash,driver);report.log('crash',driver);
+  if(vehicle.kind!=='bike')addStar(driver);
 }
 
 // ---- Police car + giant roadblocks (game/policeCar.js, game/scanModel.js) ----
@@ -3220,7 +3349,7 @@ async function initActivity(saved=null){
   // afterwards, so shader compilation cannot leave its boot overlay stuck.
   setLoad(i18n('startingMode'),0.9);await nextFrame();
   controls.enabled=mode==='orbit';
-  fitNear();updateWeatherView(camera);renderScene(0);
+  fitNear();updateWalkViews(0);updateWeatherView(camera);renderScene(0);
   setLoad(i18n('done'),1);await nextFrame();
   document.getElementById('loading').hidden=true;
   readyToPause=true;
@@ -3260,7 +3389,7 @@ async function startSession(selected,fromSave=false,fresh=false){
       document.body.classList.remove('in-main-menu');document.getElementById('launcher').hidden=true;
       pauseMenu.showModal();resumeGame();return;
     }
-    if(!saveProgress()){document.getElementById('launcher-status').textContent=i18n('saveFailed');return;}
+    if(!saveProgress(true)){document.getElementById('launcher-status').textContent=i18n('saveFailed');return;}
     phone?.events.close();
     const url=new URL(location.href);
     for(const key of ['mode','car','at','demo','skipIntro','exit','resume'])url.searchParams.delete(key);

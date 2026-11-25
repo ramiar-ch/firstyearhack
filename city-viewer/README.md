@@ -14,7 +14,7 @@ Press **Esc** or click **Menu** to pause. The pause menu offers Resume, Settings
 
 **Shortcuts:** in Esc → Settings → Shortcuts, click a binding and press its replacement. Conflicts are rejected, Esc cancels capture, and Reset shortcuts restores defaults. Bindings apply to movement, gameplay actions and P2, and persist in this browser. Esc always opens the pause menu.
 
-**Main menu and saves:** choose Street Missions to see New game, any saved run with its date and progress, and Resume when a Street session is already open. Resume returns to the same world immediately. New game starts a fresh Street run, and loading a saved run skips the intro. Sightseeing keeps its own launcher entry and save. The Esc menu offers Save game and Load saved game. Returning to the main menu or exiting saves automatically, and returning to the launcher pauses the world while keeping phone pairing alive. Saves belong to the current browser and origin (use the same address and port).
+Choose **Street Missions** to see New game, any saved run with its date and progress, and Resume when a Street session is already open. Resume returns to the same world immediately. New game starts a fresh Street run, and loading a saved run skips the intro. Sightseeing keeps its own launcher entry and save. Both the launcher and the Esc menu offer **Delete saved game** with confirmation. Deleting the active session's save keeps the session open and disables autosaving for it until you choose Save game again. Returning to the launcher pauses the world while keeping phone pairing alive. Saves belong to the current browser and origin (use the same address and port).
 
 The first visit needs internet access for Three.js and the QR code library on jsDelivr. Menus default to English on each visit. The **中文** button in the launcher and Settings switches the language for the current visit, and `?lang=zh` explicitly opens in Chinese.
 
@@ -63,6 +63,8 @@ The Places menu frames the detailed landmark models. Elizabeth Tower's four dial
 ## Collisions and modding
 
 Building walls (from the OSM footprints), Thames embankments, bridge parapets and railway viaduct walls are stored as line segments. Trees, posts, docks, street furniture and viaduct piers use circles. Walking, driving and cycling use the same collision world. Each car, bus and bicycle has a footprint that turns with it. The player and AI traffic check the full motion to the next position against those footprints and static obstacles. Traffic follows the road network on the left and yields to red lights and occupied space.
+
+Pedestrians have circular footprints. A player or vehicle can push them sideways into clear space. If neither side is clear, the mover stops at contact. After a brief stumble, pedestrians walk back to their routes once the way is clear. Bicycle crashes slow the rider without raising the Street Missions wanted level. Ambient vehicles are recycled only when both the old and new positions are outside every active camera and away from the players.
 
 Run all regression tests from the repository root with `npm test`. The suite covers game and controller script parsing, collision, pairing, saves, shortcuts, nearby vehicles and the solo driving camera.
 

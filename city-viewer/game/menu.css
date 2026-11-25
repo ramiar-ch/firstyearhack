@@ -31,6 +31,7 @@ body.in-main-menu > :not(#launcher):not(script):not(style):not(link){display:non
 .launch-choices h2{margin:0 0 2px;font-size:21px}
 .launch-choices h2:focus{outline:none}
 .launch-choices button,.pause-actions button{padding:14px 16px;text-align:left;border-radius:6px}
+button[data-delete]:enabled{color:#ffc0b5}
 .launch-choices strong{display:block;font-size:18px}
 .launch-choices span{display:block;color:inherit;opacity:.77;font-size:13px;margin-top:4px}
 .launch-primary,#resume-game{color:#16100a;background:#ffc476;border-color:#ffc476;font-weight:700}

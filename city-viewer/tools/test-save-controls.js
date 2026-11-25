@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const storage = () => {
   const values = new Map();
-  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
 };
 const snapshot = () => ({
   activity: 'street', mode: 'strand', hours: 15.5, camera: [0,10,20], target: [0,0,0],
@@ -72,4 +72,19 @@ test('storage failures are reported and do not replace the existing save', async
   db.setItem = () => { throw new Error('Quota exceeded'); };
   assert.throws(() => writeSave({...snapshot(),hours:20},db), /Quota exceeded/);
   assert.deepEqual(readSave('street',db),saved);
+});
+
+test('deleting a save removes only that mode and reports storage failure', async () => {
+  const { deleteSave, readSave, writeSave } = await import('../js/savegame.js');
+  const db = storage();
+  const street = writeSave(snapshot(), db);
+  const sightseeing = writeSave({ ...snapshot(), activity: 'sightseeing', mode: 'orbit' }, db);
+  assert.throws(() => deleteSave('unknown', db), /Invalid game mode/);
+  deleteSave('sightseeing', db);
+  assert.equal(readSave('sightseeing', db), null);
+  assert.deepEqual(readSave('street', db), street);
+  assert.ok(sightseeing.savedAt);
+  db.removeItem = () => { throw new Error('Storage blocked'); };
+  assert.throws(() => deleteSave('street', db), /Storage blocked/);
+  assert.deepEqual(readSave('street', db), street);
 });

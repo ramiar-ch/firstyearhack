@@ -5,7 +5,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '../city-traffic.js'), 'utf8');
-const {footprint, vehicleOverlap, circleOverlap, wallOverlap, createSpace, sweep} = vm.runInNewContext(`${source}\nCityTraffic`);
+const {footprint, vehicleOverlap, circleOverlap, wallOverlap, createSpace, canRecycle, sweep, sweepPedestrians, pedestrianEgress} = vm.runInNewContext(`${source}\nCityTraffic`);
 const car = ({x, z, yaw}) => footprint(x, z, yaw, 2.25, 4.55);
 const bus = ({x, z, yaw}) => footprint(x, z, yaw, 3.21, 11.4);
 const bike = ({x, z, yaw}) => footprint(x, z, yaw, 0.88, 2.04);
@@ -62,4 +62,46 @@ test('moving and removing an actor updates all of its occupied cells', () => {
   assert.equal(space.hit(moved), vehicle);
   space.remove(vehicle);
   assert.equal(space.hit(moved), undefined);
+});
+
+test('traffic recycling respects both players and both camera directions', () => {
+  const players = [{x:0,z:0}, {x:800,z:0}];
+  const visibleInEitherView = (x,z) => (Math.abs(x)<40 && z>0) || (Math.abs(x-800)<40 && z<0);
+  assert.equal(canRecycle(0,350,players,140,visibleInEitherView), false);
+  assert.equal(canRecycle(800,-350,players,140,visibleInEitherView), false);
+  assert.equal(canRecycle(810,80,players,140,visibleInEitherView), false);
+  assert.equal(canRecycle(0,-350,players,140,visibleInEitherView), true);
+});
+
+function pedestrianFixture() {
+  const space = createSpace(6, (box,ped) => circleOverlap(box,ped.x,ped.z,ped.hw));
+  const ped = {x:0, z:6, radius:0.27};
+  const place = () => space.place(ped, footprint(ped.x,ped.z,0,2*ped.radius,2*ped.radius));
+  place();
+  return {ped,place,space};
+}
+
+test('a fast car pushes a pedestrian sideways without tunnelling', () => {
+  const {ped,place,space} = pedestrianFixture();
+  const end = {x:0,z:14,yaw:0};
+  const result = sweepPedestrians({x:0,z:0,yaw:0},end,2.6,car,space,(person,box) => {
+    const next = pedestrianEgress(person,box,person.radius,x => x<0);
+    assert.ok(next);
+    Object.assign(person,next);
+    place();
+    return true;
+  });
+  assert.equal(result.pose,end);
+  assert.equal(result.hit,null);
+  assert.ok(ped.x < -1.39);
+  assert.equal(space.hit(car({x:0,z:6,yaw:0})),undefined);
+});
+
+test('a car stops when there is no room to push a pedestrian', () => {
+  const {ped,space} = pedestrianFixture();
+  const result = sweepPedestrians({x:0,z:0,yaw:0},{x:0,z:14,yaw:0},2.6,car,space,(person,box) =>
+    pedestrianEgress(person,box,person.radius,() => false));
+  assert.equal(result.hit,ped);
+  assert.equal(circleOverlap(car(result.pose),ped.x,ped.z,ped.radius),false);
+  assert.ok(result.pose.z > 3.25 && result.pose.z <= 3.455);
 });

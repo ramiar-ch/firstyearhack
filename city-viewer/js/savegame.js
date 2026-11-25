@@ -46,3 +46,7 @@ export function writeSave(snapshot, storage = localStorage) {
   storage.setItem(PREFIX + save.activity, JSON.stringify(save));
   return save;
 }
+export function deleteSave(activity, storage = localStorage) {
+  if (activity !== 'street' && activity !== 'sightseeing') throw new Error('Invalid game mode');
+  storage.removeItem(PREFIX + activity);
+}

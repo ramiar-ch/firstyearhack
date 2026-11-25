@@ -36,11 +36,13 @@ const CityTraffic = (() => {
       Math.abs(x * sz - z * sx) <= box.hw * Math.abs(sz) + box.hl * Math.abs(sx);
   }
 
-  function createSpace(cellSize = 12) {
+  function createSpace(cellSize = 12, overlaps = vehicleOverlap) {
     const cells = new Map(), occupancy = new Map();
     function eachCell(box, visit) {
-      for (let x = Math.floor((box.x - box.ex) / cellSize); x <= Math.floor((box.x + box.ex) / cellSize); x++) {
-        for (let z = Math.floor((box.z - box.ez) / cellSize); z <= Math.floor((box.z + box.ez) / cellSize); z++) {
+      const minX = Math.floor((box.x - box.ex) / cellSize), maxX = Math.floor((box.x + box.ex) / cellSize);
+      const minZ = Math.floor((box.z - box.ez) / cellSize), maxZ = Math.floor((box.z + box.ez) / cellSize);
+      for (let x = minX; x <= maxX; x++) {
+        for (let z = minZ; z <= maxZ; z++) {
           if (visit(x * 100003 + z)) return true;
         }
       }
@@ -58,17 +60,20 @@ const CityTraffic = (() => {
         occupancy.delete(actor);
       },
       place(actor, box) {
-        const previous = occupancy.get(actor), keys = [];
-        eachCell(box, key => { keys.push(key); });
-        if (previous && keys.length === previous.keys.length && keys.every((key, i) => key === previous.keys[i])) {
+        const previous = occupancy.get(actor);
+        const first = Math.floor((box.x-box.ex)/cellSize)*100003 + Math.floor((box.z-box.ez)/cellSize);
+        const last = Math.floor((box.x+box.ex)/cellSize)*100003 + Math.floor((box.z+box.ez)/cellSize);
+        if (previous && first === previous.keys[0] && last === previous.keys.at(-1)) {
           previous.box = box;
           return;
         }
         this.remove(actor);
-        for (const key of keys) {
+        const keys = [];
+        eachCell(box, key => {
+          keys.push(key);
           if (!cells.has(key)) cells.set(key, new Set());
           cells.get(key).add(actor);
-        }
+        });
         occupancy.set(actor, {box, keys});
       },
       hit(box, ignore, alsoIgnore) {
@@ -77,7 +82,7 @@ const CityTraffic = (() => {
           const cell = cells.get(key);
           if (!cell) return false;
           for (const actor of cell) {
-            if (actor !== ignore && actor !== alsoIgnore && vehicleOverlap(box, occupancy.get(actor).box)) {
+            if (actor !== ignore && actor !== alsoIgnore && overlaps(box, occupancy.get(actor).box)) {
               found = actor;
               return true;
             }
@@ -87,6 +92,46 @@ const CityTraffic = (() => {
         return found;
       },
     };
+  }
+
+  function canRecycle(x, z, anchors, clearance, visible) {
+    const clearanceSq = clearance * clearance;
+    return anchors.every(p => (p.x-x)**2 + (p.z-z)**2 > clearanceSq) && !visible(x,z);
+  }
+
+  function sweepPedestrians(start, end, radius, boxAt, space, push) {
+    const dx = end.x-start.x, dz = end.z-start.z, turn = end.yaw-start.yaw;
+    const travel = Math.hypot(dx,dz) + Math.abs(turn)*radius;
+    if (!travel) return {pose:end, hit:null};
+    const broad = footprint((start.x+end.x)/2, (start.z+end.z)/2, 0,
+      Math.abs(dx)+2*radius, Math.abs(dz)+2*radius);
+    if (!space.hit(broad)) return {pose:end, hit:null};
+
+    const steps = Math.ceil(travel/0.17);
+    let pose = start;
+    for (let i = 1; i <= steps; i++) {
+      const t = i/steps;
+      const next = {x:start.x+dx*t, z:start.z+dz*t, yaw:start.yaw+turn*t};
+      const box = boxAt(next);
+      let pedestrian;
+      while ((pedestrian = space.hit(box))) {
+        if (!push(pedestrian, box, boxAt(pose))) return {pose, hit:pedestrian};
+      }
+      pose = next;
+    }
+    return {pose:end, hit:null};
+  }
+
+  function pedestrianEgress(pedestrian, box, radius, isFree) {
+    const across = (pedestrian.x-box.x)*box.fz - (pedestrian.z-box.z)*box.fx;
+    const side = across < 0 ? -1 : 1;
+    for (const direction of [side,-side]) {
+      const offset = direction*(box.hw+radius+0.09)-across;
+      if (Math.abs(offset) > box.hw+radius+0.35) continue;
+      const x = pedestrian.x + box.fz*offset, z = pedestrian.z - box.fx*offset;
+      if (isFree(x,z)) return {x,z};
+    }
+    return null;
   }
 
   // Step the fastest-moving corner as well as the centre, and stop at the last clear pose.
@@ -114,5 +159,5 @@ const CityTraffic = (() => {
     return {pose, hit: null};
   }
 
-  return {footprint, vehicleOverlap, circleOverlap, wallOverlap, createSpace, sweep};
+  return {footprint, vehicleOverlap, circleOverlap, wallOverlap, createSpace, canRecycle, sweep, sweepPedestrians, pedestrianEgress};
 })();
