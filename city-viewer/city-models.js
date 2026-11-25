@@ -500,15 +500,18 @@ function createCityModels(THREE, mergeGeometries, time) {
   // The detailed mesh is used at street level. Both meshes use the same joint positions.
   function pedestrianGeometry(detail, style = 'man') {
     const batch = geometryBatch();
-    const radial = detail ? 8 : 5;
-    const woman = style === 'woman', older = style === 'older', child = style === 'child';
+    const radial = detail ? 10 : 5;
+    const woman = style === 'woman' || style === 'olderWoman';
+    const older = style === 'older' || style === 'olderWoman';
+    const child = style === 'child', teen = style === 'teen', worker = style === 'worker';
     function oval(size, at, color, limb = 0, dye = 0) {
       batch.add(new THREE.SphereGeometry(1, radial, detail ? 6 : 3).scale(...size).translate(...at), color, limb, dye);
     }
     function tapered(top, bottom, length, depth, at, color, limb, dye) {
       batch.add(new THREE.CylinderGeometry(top, bottom, length, radial, 1, !detail).scale(1, 1, depth).translate(...at), color, limb, dye);
     }
-    const jacket = [[0, woman ? 0.70 : 0.86], [0.14, woman ? 0.70 : 0.86], [woman ? 0.206 : 0.19, woman ? 0.76 : 0.91],
+    const longCoat = woman || older;
+    const jacket = [[0, longCoat ? 0.72 : 0.86], [0.14, longCoat ? 0.72 : 0.86], [woman ? 0.206 : 0.19, longCoat ? 0.79 : 0.91],
       [woman ? 0.155 : 0.179, 1.09], [woman ? 0.182 : 0.202, 1.34], [woman ? 0.158 : 0.187, 1.46],
       [0.112, 1.53], [0.063, 1.54], [0, 1.54]];
     batch.add(new THREE.LatheGeometry(jacket.map(p => new THREE.Vector2(...p)), radial).scale(1, 1, 0.67), white, 0, 1);
@@ -518,15 +521,17 @@ function createCityModels(THREE, mergeGeometries, time) {
       const leg = new THREE.LatheGeometry(legProfile.map(p => new THREE.Vector2(...p)), radial);
       batch.add(leg.scale(1, 1, 1.04).translate(x, 0, 0), 0xb2bac2, side, 3);
       oval([0.063, 0.043, 0.125], [x, 0.043, 0.055], 0x282b2f, side);
-      tapered(0.073, 0.058, 0.29, 0.96, [side * 0.219, 1.32, 0], white, side * 2, 1);
-      tapered(0.057, 0.037, 0.265, 0.94, [side * 0.233, 1.06, 0.007], 0xdde1e5, side * 2, 1);
-      oval([0.039, 0.064, 0.033], [side * 0.234, 0.891, 0.016], white, side * 2, 2);
+      tapered(0.062, 0.051, 0.26, 0.96, [side * 0.215, 1.306, 0], white, side * 2, 1);
+      tapered(0.052, 0.037, 0.252, 0.94, [side * 0.231, 1.062, 0.007], 0xe6e6e4, side * 3, 1);
+      oval([0.039, 0.064, 0.033], [side * 0.234, 0.891, 0.016], white, side * 3, 2);
       if (detail) {
-        oval([0.072, 0.077, 0.064], [side * 0.203, 1.428, 0], white, side * 2, 1);
+        oval([0.065, 0.080, 0.064], [side * 0.202, 1.422, 0], white, side * 2, 1);
+        oval([0.052, 0.053, 0.047], [side * 0.228, 1.185, 0.005], 0xe8e9e7, side * 3, 1);
         oval([0.063, 0.012, 0.121], [x, 0.012, 0.053], 0x525158, side);
         oval([0.018, 0.031, 0.020], [side * 0.090, 1.646, 0.005], 0xe4c6b0, 0, 2);
         const pocket = new THREE.BoxGeometry(0.008, 0.087, 0.010).rotateZ(side * -0.47);
         batch.add(pocket.translate(side * 0.105, 1.045, 0.108), 0x676b70, 0, 1);
+        tapered(0.041,0.037,0.036,0.94,[side*0.233,0.938,0.012],0xb1b4b4,side*3,1);
       }
     }
     tapered(0.052, 0.058, 0.13, 0.94, [0, 1.544, 0.009], 0xe8d4c4, 0, 2);
@@ -534,19 +539,35 @@ function createCityModels(THREE, mergeGeometries, time) {
     const headSize = child ? 1.19 : 1;
     batch.add(new THREE.SphereGeometry(1, headRadial, detail ? 8 : 4)
       .scale(0.089 * headSize, 0.113 * headSize, 0.092 * headSize).translate(0, 1.660, 0.013), white, 0, 2);
-    const hair = new THREE.SphereGeometry(1, headRadial, detail ? 5 : 3, 0, Math.PI * 2, 0, Math.PI * 0.53);
-    hair.rotateX(-0.22).scale(0.097 * headSize, 0.119 * headSize, 0.103 * headSize).translate(0, 1.665, 0.009);
+    const hair = new THREE.SphereGeometry(1, headRadial, detail ? 6 : 3, 0, Math.PI * 2, 0, Math.PI * 0.465);
+    hair.rotateX(-0.21).scale(0.095 * headSize, 0.117 * headSize, 0.101 * headSize).translate(0, 1.671, 0.003);
     batch.add(hair, older ? 0xa4a29d : 0x392b27, 0, older ? 0 : 4);
-    if (woman) oval([0.083, 0.147, 0.084], [0, 1.565, -0.048], 0x392b27, 0, 4);
-    if (child) {
-      oval([0.146, 0.194, 0.086], [0, 1.232, -0.133], 0x87a9a6, 0, 1);
+    if (woman && !older) oval([0.083, 0.147, 0.084], [0, 1.565, -0.048], 0x392b27, 0, 4);
+    if (older) {
+      oval([0.104,0.043,0.073],[0,1.496,0.037],woman?0x9b5f57:0x6e6958);
+      if(woman)oval([0.044,0.119,0.021],[0.052,1.399,0.117],0x93584f);
+    }
+    if (child || teen) {
+      oval([0.146, 0.194, 0.086], [0, 1.232, -0.133], teen?0x41484b:0x76908c, 0, child?1:0);
       oval([0.081, 0.034, 0.064], [0, 1.439, -0.153], 0x283845);
+      if(teen)oval([0.098,0.062,0.104],[0,1.504,-0.075],0xbcbdbe,0,1);
+      for(const side of [-1,1])box(batch,[0.027,0.38,0.022],[side*0.094,1.254,0.122],0x41494c,side*-0.07);
+    }
+    if(worker){
+      oval([0.100,0.041,0.110],[0,1.766,0.015],0xb4a65d);
+      oval([0.109,0.013,0.128],[0,1.746,0.025],0xb0a36c);
+      tapered(0.173,0.177,0.042,0.72,[0,1.113,0],0xa6aca3,0,1);
+      box(batch,[0.062,0.091,0.014],[-0.087,1.35,0.131],0xc6c7b8);
     }
     if (detail) {
       oval([0.016, 0.027, 0.021], [0, 1.646, 0.099], 0xe4c6b0, 0, 2);
+      oval([0.025,0.004,0.004],[0,1.613,0.100],0x7b5b50);
       for (const x of [-0.034, 0.034]) {
-        oval([0.013, 0.005, 0.004], [x, 1.684, 0.095 * headSize], 0x392f30);
-        if (older) batch.add(new THREE.TorusGeometry(0.024, 0.0034, 5, 9).translate(x, 1.683, 0.105), 0x474347);
+        const eyeZ = 0.013+0.085*headSize;
+        oval([0.014,0.0055,0.0045],[x,1.684,eyeZ],0xc7b7a7);
+        oval([0.006,0.0048,0.003],[x,1.684,eyeZ+0.004],0x3f3835);
+        oval([0.017,0.0038,0.004],[x,1.699,eyeZ-0.001],older?0x74716b:0x473b34);
+        if (older) batch.add(new THREE.TorusGeometry(0.020, 0.0028, 5, 9).translate(x, 1.682, eyeZ+0.008), 0x474347);
       }
       oval([0.091, 0.051, 0.081], [0, 1.511, -0.052], 0xa9aeb5, 0, 1);
       batch.add(new THREE.BoxGeometry(0.012, 0.55, 0.009).translate(0, 1.202, 0.135), 0x868d95, 0, 1);
@@ -571,9 +592,12 @@ function createCityModels(THREE, mergeGeometries, time) {
       float side = sign(features.x);
       float limb = abs(features.x);
       float walking = step(0.01, walk.x);
-      float lift = max(0.0, side * cos(phase)) * walking;
-      float knee = limb == 1.0 ? lift * 0.55 : 0.0;
-      float swing = side * sin(phase) * (limb == 1.0 ? 0.39 : -0.25) * (1.0 - walk.z * 1.7) * walking;
+      float lift = max(0.0, -side * cos(phase)) * walking;
+      float flex = limb == 1.0 ? (1.0 - smoothstep(0.36, 0.55, position.y)) : 0.0;
+      float knee = lift * 0.48 * flex * (1.0 - walk.z);
+      float elbow = limb > 2.5 ? (-0.10 - 0.16 * max(0.0, side * sin(phase)) * walking) : 0.0;
+      float swing = side * sin(phase) * (limb == 1.0 ? 0.34 : -0.18) * (1.0 - walk.z * 1.7) * walking;
+      float roll = 0.028 * sin(phase) * smoothstep(0.8, 1.45, position.y) * walking;
     `;
     for (const m of [material, depth]) {
       m.onBeforeCompile = shader => {
@@ -583,14 +607,18 @@ function createCityModels(THREE, mergeGeometries, time) {
           .replace('#include <begin_vertex>', `#include <begin_vertex>
             ${stride}
             if (limb == 1.0) {
-              float flex = 1.0 - smoothstep(0.37, 0.55, position.y);
-              transformed = rotateStride(transformed - vec3(0.0, 0.47, 0.0), knee * flex) + vec3(0.0, 0.47, 0.0);
+              transformed = rotateStride(transformed - vec3(0.0, 0.47, 0.0), knee) + vec3(0.0, 0.47, 0.0);
+            }
+            if (limb > 2.5) {
+              transformed = rotateStride(transformed - vec3(0.0, 1.19, 0.0), elbow) + vec3(0.0, 1.19, 0.0);
             }
             if (limb > 0.0) {
               float pivot = limb == 1.0 ? 0.88 : 1.43;
               transformed = rotateStride(transformed - vec3(0.0, pivot, 0.0), swing) + vec3(0.0, pivot, 0.0);
             }
-            transformed.y -= 0.05 * sin(phase) * sin(phase) * walking;
+            // Keep the shoe sole above the pavement and attenuate torso bob.
+            transformed.y = max(0.0,transformed.y - 0.014 * sin(phase) * sin(phase) * walking);
+            transformed.x += roll;
             transformed = rotateStride(transformed - vec3(0.0, 0.85, 0.0), walk.z * smoothstep(0.72, 1.4, position.y)) + vec3(0.0, 0.85, 0.0);
           `);
         if (m === material) {
@@ -599,7 +627,8 @@ function createCityModels(THREE, mergeGeometries, time) {
             .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>
               {
                 ${stride}
-                if (limb == 1.0) objectNormal = rotateStride(objectNormal, knee * (1.0 - smoothstep(0.37, 0.55, position.y)));
+                if (limb == 1.0) objectNormal = rotateStride(objectNormal, knee);
+                if (limb > 2.5) objectNormal = rotateStride(objectNormal, elbow);
                 if (limb > 0.0) objectNormal = rotateStride(objectNormal, swing);
                 objectNormal = rotateStride(objectNormal, walk.z * smoothstep(0.72, 1.4, position.y));
               }

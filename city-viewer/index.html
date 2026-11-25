@@ -1181,8 +1181,19 @@ const cityModels=createCityModels(THREE,mergeGeometries,uTime);
 const vehicleMaterials=cityModels.vehicleMaterials();
 ENVMATS.push(vehicleMaterials.paint,vehicleMaterials.glass);
 
-const PED_COUNT=1500;
-const lifeView=new THREE.Frustum(),lifeProjection=new THREE.Matrix4();
+const PED_COUNT=1775;
+const PED_PROFILES=[
+  {style:'man',weight:0.27,height:[0.94,1.11],width:[0.90,1.16],speed:[1.10,1.55],stoop:0},
+  {style:'woman',weight:0.27,height:[0.86,1.03],width:[0.84,1.09],speed:[1.04,1.52],stoop:0},
+  {style:'older',weight:0.09,height:[0.87,1.02],width:[0.87,1.13],speed:[0.68,1.03],stoop:0.14},
+  {style:'olderWoman',weight:0.08,height:[0.82,0.96],width:[0.87,1.14],speed:[0.67,1.06],stoop:0.12},
+  {style:'child',weight:0.12,height:[0.54,0.77],width:[0.63,0.80],speed:[0.92,1.37],stoop:0},
+  {style:'teen',weight:0.12,height:[0.77,0.97],width:[0.72,0.94],speed:[1.19,1.64],stoop:0.04},
+  {style:'worker',weight:0.05,height:[0.91,1.09],width:[0.94,1.16],speed:[1.00,1.45],stoop:0},
+];
+const lifeProjection=new THREE.Matrix4();
+const lifeViews=Array.from({length:4},()=>({frustum:new THREE.Frustum(),camera:null}));
+let lifeViewCount=1;
 const pedBounds=new THREE.Sphere(new THREE.Vector3(),2);
 const vehicleBounds=new THREE.Sphere(new THREE.Vector3(),6);
 const pedMeshes={};
@@ -1194,7 +1205,7 @@ function updateInstanceAttribute(attribute,count){
 }
 function buildPedMeshes(){
   const {material,depth}=cityModels.pedestrianMaterials();
-  for(const style of ['man','woman','older','child']){
+  for(const {style} of PED_PROFILES){
     const capacity=peds.filter(p=>p.style===style).length;
     pedMeshes[style]=[];
     for(const detail of [false,true]){
@@ -1216,12 +1227,31 @@ function buildPedMeshes(){
     }
   }
 }
-function multipleLifeViews(){return split?.on||(mode==='walk'&&Players.players.length>1);}
+function updateLifeViews(){
+  const cameras=split?.on?[camera,split.camera2]:
+    mode==='walk'&&Views.layout.length>1?Views.layout.map(view=>view.camera).filter(Boolean):[camera];
+  lifeViewCount=cameras.length;
+  cameras.forEach((cam,i)=>{
+    cam.updateMatrixWorld();
+    lifeViews[i].camera=cam;
+    lifeViews[i].frustum.setFromProjectionMatrix(lifeProjection.multiplyMatrices(cam.projectionMatrix,cam.matrixWorldInverse));
+  });
+}
+function lifeVisibility(bounds,near,far=Infinity){
+  let closest=Infinity, visible=false;
+  for(let i=0;i<lifeViewCount;i++){
+    const view=lifeViews[i],distance=view.camera.position.distanceToSquared(bounds.center);
+    if(distance>far)continue;
+    closest=Math.min(closest,distance);
+    if(distance<near||view.frustum.intersectsSphere(bounds))visible=true;
+  }
+  return visible?closest:Infinity;
+}
 function addPedInstance(p,x,y,z){
   pedBounds.center.set(x,y+0.9,z);
-  const distance=camera.position.distanceToSquared(pedBounds.center);
-  if(!multipleLifeViews()&&(distance>700**2 || (distance>45**2 && !lifeView.intersectsSphere(pedBounds))))return;
-  const {mesh}=pedMeshes[p.style][Number(distance<45**2)];
+  const distance=lifeVisibility(pedBounds,38**2,700**2);
+  if(distance===Infinity)return;
+  const {mesh}=pedMeshes[p.style][Number(distance<38**2)];
   const i=mesh.count++;
   _q.setFromAxisAngle(UP,p.yaw);
   _m4.compose(_p.set(x,y,z),_q,_s.set(p.width,p.height,p.width));
@@ -1285,19 +1315,15 @@ function buildLife(){
   const trousers=palette([0x3a444e,0x30343b,0x63768c,0x85765e,0x282b31]);
   const styleRandom=mulberry32(514);
   const style=items=>items[Math.floor(styleRandom()*items.length)];
-  const profiles=[
-    {style:'man',height:[0.94,1.11],width:[0.90,1.14],speed:[1.10,1.55],stoop:0},
-    {style:'woman',height:[0.86,1.03],width:[0.84,1.05],speed:[1.04,1.52],stoop:0},
-    {style:'older',height:[0.84,0.99],width:[0.87,1.12],speed:[0.68,1.03],stoop:0.19},
-    {style:'child',height:[0.54,0.77],width:[0.63,0.80],speed:[0.92,1.37],stoop:0},
-  ];
   for(let i=0;i<PED_COUNT;i++){
-    const e=pickEdge(PEDG,10),r=styleRandom();
-    const profile=profiles[r<0.35?0:r<0.71?1:r<0.86?2:3];
+    const e=pickEdge(PEDG,10);
+    let selection=styleRandom();
+    const profile=PED_PROFILES.find(profile=>(selection-=profile.weight)<0)||PED_PROFILES[0];
     const vary=range=>lerp(...range,styleRandom());
     peds.push({e,fwd:rand()<0.5,s:rand()*e.len,v:vary(profile.speed),side:rand()<0.5?1:-1,
       off:rr(0.8,2.2),phase:rand()*Math.PI*2,height:vary(profile.height),width:vary(profile.width),style:profile.style,
-      stoop:profile.stoop*(0.65+styleRandom()*0.60),coat:style(coats),skin:style(skins),trousers:style(trousers)});
+      stoop:profile.stoop*(0.65+styleRandom()*0.60),
+      coat:profile.style==='worker'?new THREE.Color(0x95864b):style(coats),skin:style(skins),trousers:style(trousers)});
   }
   buildPedMeshes();
 }
@@ -1505,8 +1531,7 @@ function updateTraffic(dt){
   }
 }
 function updateLife(dt){
-  camera.updateMatrixWorld();
-  lifeView.setFromProjectionMatrix(lifeProjection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+  updateLifeViews();
   if(lifeRoot.visible){
     for(const {list,body,meshes} of Object.values(VT)){
       if(!body)continue;
@@ -1514,7 +1539,7 @@ function updateLife(dt){
       for(const v of list){
         if(v.held||v.suppressed)continue;
         vehicleBounds.center.set(v.px,2,v.pz);
-        if(!multipleLifeViews()&&camera.position.distanceToSquared(vehicleBounds.center)>50**2&&!lifeView.intersectsSphere(vehicleBounds))continue;
+        if(lifeVisibility(vehicleBounds,50**2)===Infinity)continue;
         _q.setFromAxisAngle(UP,v.yaw);
         _m4.compose(_p.set(v.px,actorGround(v),v.pz),_q,_s.set(1,1,1));
         body.setMatrixAt(count,_m4);
