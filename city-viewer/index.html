@@ -326,7 +326,8 @@ import { WantedLevel } from './game/wanted.js';
 
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
-import { createProtagonist } from './js/protagonist.js';
+import { createProtagonist, strideLength } from './js/protagonist.js';
+import { hasCharacterDetail, loadCharacterDetail } from './js/character-detail.js';
 import { surfaces, tileMetres, loadStreetSurfaces, loadStreetReflection } from './js/street-surfaces.js';
 import * as ChaseCam from './js/chaseCam.js';
 import * as Views from './js/views.js';
@@ -1423,6 +1424,8 @@ const pedBounds=new THREE.Sphere(new THREE.Vector3(),2);
 const vehicleBounds=new THREE.Sphere(new THREE.Vector3(),6);
 const recycleBounds=new THREE.Sphere(new THREE.Vector3(),16);
 const pedMeshes={};
+const closePedestrians=[],nearbyPedestrians=[];
+const CLOSE_PED_LIMIT=12,CLOSE_PED_ENTER=11,CLOSE_PED_EXIT=14;
 function updateInstanceAttribute(attribute,count){
   if(!count)return;
   attribute.clearUpdateRanges();
@@ -1482,15 +1485,62 @@ function addPedInstance(p,x,y,z){
   pedBounds.center.set(x,y+0.9,z);
   const distance=lifeVisibility(pedBounds,38**2,700**2);
   if(distance===Infinity)return;
+  if(hasCharacterDetail()&&distance<(p.closeRig?CLOSE_PED_EXIT:CLOSE_PED_ENTER)**2){
+    nearbyPedestrians.push({p,distance});
+    return;
+  }
+  addCrowdInstance(p,distance);
+}
+function addCrowdInstance(p,distance){
   const {mesh}=pedMeshes[p.style][Number(distance<38**2)];
   const i=mesh.count++;
   _q.setFromAxisAngle(UP,p.yaw);
-  _m4.compose(_p.set(x,y,z),_q,_s.set(p.width,p.height,p.width));
+  _m4.compose(_p.set(p.x,p.y,p.z),_q,_s.set(p.width,p.height,p.width));
   mesh.setMatrixAt(i,_m4);
   mesh.setColorAt(i,p.coat);
   mesh.geometry.attributes.walk.setXYZ(i,p.walking===false?0:p.v*(p.style==='child'?7.9:5.05),p.phase,p.stoop);
   mesh.geometry.attributes.skin.setXYZ(i,p.skin.r,p.skin.g,p.skin.b);
   mesh.geometry.attributes.trousers.setXYZ(i,p.trousers.r,p.trousers.g,p.trousers.b);
+}
+function updateClosePedestrians(dt){
+  nearbyPedestrians.sort((a,b)=>a.distance-b.distance);
+  const selected=new Set(nearbyPedestrians.slice(0,CLOSE_PED_LIMIT).map(entry=>entry.p));
+  for(const slot of closePedestrians){
+    if(!slot.actor||selected.has(slot.actor))continue;
+    slot.actor.closeRig=null;
+    slot.actor=null;
+    slot.rig.root.visible=false;
+  }
+  for(const {p,distance} of nearbyPedestrians){
+    if(!selected.has(p)){addCrowdInstance(p,distance);continue;}
+    let slot=p.closeRig;
+    if(!slot){
+      const avatar={style:p.style,skin:p.skin.getHex(),trousers:p.trousers.getHex(),blinkOffset:p.phase};
+      slot=closePedestrians.find(entry=>!entry.actor&&entry.style===p.style);
+      if(!slot){
+        slot=closePedestrians.find(entry=>!entry.actor);
+        if(slot){slot.rig.root.removeFromParent();slot.rig.dispose();}
+        else{slot={};closePedestrians.push(slot);}
+        slot.rig=createProtagonist(avatar,p.coat.getHex());
+        slot.rig.root.name='Close pedestrian · '+p.style;
+        slot.style=p.style;
+        lifeRoot.add(slot.rig.root);
+      }else slot.rig.setAppearance(avatar,p.coat.getHex());
+      slot.actor=p;p.closeRig=slot;
+      slot.rig.root.visible=true;
+      slot.x=p.x;slot.z=p.z;slot.phase=p.phase/(2*Math.PI);slot.gait=0;
+    }
+    const travelled=Math.hypot(p.x-slot.x,p.z-slot.z);
+    const speed=travelled<0.35?travelled/Math.max(dt,1e-4):0;
+    slot.gait=lerp(slot.gait,clamp(speed/1.1,0,1),1-Math.exp(-dt*10));
+    slot.phase=(slot.phase+speed*dt/(strideLength(0)*p.height*Math.max(0.32,slot.gait)))%1;
+    slot.x=p.x;slot.z=p.z;
+    const {root,animate}=slot.rig;
+    root.position.set(p.x,p.y,p.z);
+    root.rotation.y=p.yaw;
+    root.scale.set(p.width,p.height,p.width);
+    animate(slot.phase,slot.gait,0,false,0,dt);
+  }
 }
 function buildLife(){
   CARG=buildGraph(r=>r.kind==='car'&&r.type!=='service'&&r.type!=='living_street');PEDG=buildGraph(r=>r.kind!=='car'||r.type!=='service');
@@ -1807,6 +1857,7 @@ function updateTraffic(dt){
 }
 function updateLife(dt){
   if(lifeRoot.visible){
+    nearbyPedestrians.length=0;
     for(const {list,body,meshes} of Object.values(VT)){
       if(!body)continue;
       let count=0;
@@ -1870,9 +1921,10 @@ function updateLife(dt){
       }
       if(p.x!==undefined)addPedInstance(p,p.x,p.y,p.z);
     }
+    if(closePedestrians.length||nearbyPedestrians.length)updateClosePedestrians(dt);
     for(const {mesh,attributes} of Object.values(pedMeshes).flat())for(const attribute of attributes)updateInstanceAttribute(attribute,mesh.count);
   }
-  updateBicycles();
+  updateBicycles(dt);
 }
 
 /* =========================================================
@@ -2140,7 +2192,7 @@ function makeVehicleObject(kind,model,color,riderType=null){
   }
   return g;
 }
-function animateVehicle(g,travel,turn,showRider){
+function animateVehicle(g,travel,turn,showRider,dt=0){
   const {radius,wheels,steering,rider,pedals}=g.userData;
   if(steering)steering.rotation.y=turn;
   for(const {pivot,tyre,front} of wheels){
@@ -2156,7 +2208,7 @@ function animateVehicle(g,travel,turn,showRider){
   }
   if(rider){
     rider.group.visible=showRider;
-    if(showRider)rider.pedal(phase,steering,pedals);
+    if(showRider)rider.pedal(phase,steering,pedals,dt);
   }
 }
 const streetModels={};let patrolKit;
@@ -2173,9 +2225,9 @@ function makeStreetVehicle(colour,police=false,kind='car',preservePaint=false){
     const tailMat=new THREE.MeshStandardMaterial({vertexColors:true,emissive:0xed2922,emissiveIntensity:1.2,roughness:0.42});
     body.add(new THREE.Mesh(model.brakeLights,tailMat));root.userData.tailMat=tailMat;
   }
-  root.userData.animate=(travel,turn)=>{
+  root.userData.animate=(travel,turn,dt=0)=>{
     root.position.y=driveGround(root.position.x,root.position.z);
-    animateVehicle(body,travel,turn,kind==='bike'&&root.userData.occupied);
+    animateVehicle(body,travel,turn,kind==='bike'&&root.userData.occupied,dt);
   };
   if(police){
     patrolKit??=cityModels.policeEquipment();
@@ -2204,18 +2256,39 @@ function placeBikeObject(v,parent,rider){
   animateVehicle(g,0,0,rider);
   parent.add(g);
   v.object=g;
+  v.trafficRider=g.userData.rider;
 }
-function updateBicycles(){
+function updateBicycles(dt){
+  let closeRiders=0;
   for(const v of vehicles){
     if(!v.object)continue;
     const g=v.object;
     g.visible=!(v.held||v.suppressed);
     if(!g.visible||(!lifeRoot.visible&&!v.station))continue;
-    g.position.set(v.px,actorGround(v),v.pz);
+    const y=actorGround(v);
+    g.position.set(v.px,y,v.pz);
     const moving=!v.parked;
+    if(v.trafficRider&&hasCharacterDetail()){
+      const threshold=g.userData.rider===v.closeRider?CLOSE_PED_EXIT:CLOSE_PED_ENTER;
+      pedBounds.center.set(v.px,y+1,v.pz);
+      const close=moving&&closeRiders<3&&lifeVisibility(pedBounds,threshold**2,threshold**2)!==Infinity;
+      if(close){
+        if(!v.closeRider){
+          const style=['man','woman','older','olderWoman'][v.id%4];
+          const skin=[0xc7926b,0x9b664b,0xe2ba9b,0xb67c5c][v.id%4];
+          const rig=createProtagonist({style,skin,trousers:0x3c4852},v.col.getHex());
+          v.closeRider={group:rig.root,pedal:rig.pedal};
+          g.add(rig.root);
+        }
+        closeRiders++;
+      }
+      v.trafficRider.group.visible=false;
+      if(v.closeRider)v.closeRider.group.visible=false;
+      g.userData.rider=close?v.closeRider:v.trafficRider;
+    }
     const lean=moving?clamp((v.steer||0)*v.v*0.16,-0.14,0.14):0;
     g.rotation.set(0,v.yaw,lean,'YXZ');
-    animateVehicle(g,v.travel||0,v.steer||0,moving);
+    animateVehicle(g,v.travel||0,v.steer||0,moving,dt);
   }
 }
 function buildBikeStations(){
@@ -2408,7 +2481,7 @@ function updateDrive(dt){
   DRIVE.travel+=Math.hypot(DRIVE.x-oldX,DRIVE.z-oldZ)*Math.sign(vF);
   DRIVE.lean=lerp(DRIVE.lean,isBike?clamp(DRIVE.steer*vF*0.16,-0.14,0.14):clamp(vL*0.012+DRIVE.steer*vF*0.003,-0.025,0.025),1-Math.exp(-dt*9));
   const mesh=DRIVE.meshes[DRIVE.kind];
-  animateVehicle(mesh,DRIVE.travel,DRIVE.steer,DRIVE.camMode===0);
+  animateVehicle(mesh,DRIVE.travel,DRIVE.steer,DRIVE.camMode===0,dt);
   DRIVE.ground=lerp(DRIVE.ground,driveGround(DRIVE.x,DRIVE.z),1-Math.exp(-dt*16));
   DRIVE.group.position.set(DRIVE.x,DRIVE.ground,DRIVE.z);
   DRIVE.group.rotation.set(isBike?0:-clamp((thr*C.acc-vF*0.02)*0.003,-0.025,0.025),DRIVE.yaw,DRIVE.lean,'YXZ');
@@ -3462,6 +3535,7 @@ async function loadMap(){
 // Population, player vehicles and missions belong to the chosen activity.
 async function initActivity(saved=null){
   setLoad(i18n('load5'),0.35);await nextFrame();
+  await loadCharacterDetail();
   buildLife();
   Players.init({clamp,lerp,moveWalk,pedGeo:style=>cityModels.pedestrianGeometry(true,style),crowdMaterial:pedMeshes.man[1].mesh.material,crowdDepth:pedMeshes.man[1].mesh.customDepthMaterial,scene});
   if(activity==='street'){parkStrandCar();startMissions();}

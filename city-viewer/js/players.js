@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { InputState, fillBotInput } from './input.js';
 import { createViewState, snapChase } from './chaseCam.js';
 import { createProtagonist, strideLength, PRIMARY_AVATAR, PRIMARY_COLOUR } from './protagonist.js';
+import { hasCharacterDetail } from './character-detail.js';
 
 const WALK = 1.7;
 const JOG = 5.5;
@@ -172,9 +173,10 @@ export function ensureBody(p) {
 
   const avatar = AVATARS[p.slot % AVATARS.length];
   let mesh;
-  if (p.slot === 0) {
+  if (p.slot === 0 || hasCharacterDetail()) {
     p.protagonist = createProtagonist(avatar, p.colour);
     mesh = p.protagonist.root;
+    if(p.slot!==0){mesh.name=p.name+' articulated player';mesh.scale.setScalar(avatar.scale);}
     mesh.traverse(part => part.layers.set(1 + p.slot));
   } else {
     const geo = ctx.pedGeo(avatar.style);
@@ -243,10 +245,11 @@ export function updateBody(p, dt = 0) {
     const target = speed > 0.15 && !backwards ? Math.atan2(gait.vx, gait.vz) : p.yaw + Math.PI;
     const difference = target - (gait.heading ?? target);
     gait.heading = (gait.heading ?? target) + Math.atan2(Math.sin(difference), Math.cos(difference)) * (1 - Math.exp(-dt * 12));
-    if (p.grounded) gait.phase = (gait.phase + (backwards ? -1 : 1) * speed * dt / strideLength(gait.run)) % 1;
+    const stride = strideLength(gait.run) * Math.max(0.32,gait.weight);
+    if (p.grounded) gait.phase = (gait.phase + (backwards ? -1 : 1) * speed * dt / stride) % 1;
     p.body.position.copy(p.pos);
     p.body.rotation.y = gait.heading;
-    p.protagonist.animate(gait.phase, gait.weight, gait.run, !p.grounded, p.vy);
+    p.protagonist.animate(gait.phase, gait.weight, gait.run, !p.grounded, p.vy, dt);
   } else {
     _q.setFromAxisAngle(UP, p.yaw + Math.PI);
     _p.set(p.pos.x, p.pos.y, p.pos.z);

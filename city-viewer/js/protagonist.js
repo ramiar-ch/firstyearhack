@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { surfaces, tileMetres } from './street-surfaces.js';
+import { attachCharacterDetail, hasCharacterDetail } from './character-detail.js';
 
 const THIGH = 0.443;
 const SHIN = 0.421;
@@ -31,6 +32,7 @@ export function footTarget(phase, stride, run) {
 export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLOUR) {
   const root = new THREE.Group();
   root.name = 'P1 articulated protagonist';
+  const hasDetail=hasCharacterDetail();
   const materials = new Map();
   const parts = new Map();
   const coat = new THREE.Color(colour).lerp(new THREE.Color(0x575051), 0.52).getHex();
@@ -40,12 +42,13 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
   const fabricFor = tint => tint === denim ? 'denim' : tint === coat || tint === seams ? 'ripstop' : null;
   const hair = 0x302622;
   const joint = (parent, x = 0, y = 0, z = 0) => {
-    const g = new THREE.Group();
+    const g = new THREE.Bone();
     g.position.set(x, y, z);
     parent.add(g);
     return g;
   };
   const add = (parent, colour, geometry, x, y, z) => {
+    if(hasDetail){geometry.dispose();return;}
     const fabric = fabricFor(colour);
     if (fabric && (surfaces[fabric]?.color || surfaces[fabric]?.normal)) {
       geometry.computeBoundingBox();
@@ -58,9 +61,9 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     if (!parts.has(key)) parts.set(key, { parent, colour, geometries: [] });
     parts.get(key).geometries.push(geometry.translate(x, y, z));
   };
-  const oval = (p, c, x, y, z, sx, sy, sz) => add(p, c, new THREE.SphereGeometry(1, 16, 10).scale(sx, sy, sz), x, y, z);
-  const tube = (p, c, top, bottom, len, depth, x, y, z) => add(p, c, new THREE.CylinderGeometry(top, bottom, len, 14).scale(1, 1, depth), x, y, z);
-  const box = (p, c, x, y, z, w, h, d) => add(p, c, new THREE.BoxGeometry(w, h, d), x, y, z);
+  const oval = (p, c, x, y, z, sx, sy, sz) => !hasDetail&&add(p, c, new THREE.SphereGeometry(1, 16, 10).scale(sx, sy, sz), x, y, z);
+  const tube = (p, c, top, bottom, len, depth, x, y, z) => !hasDetail&&add(p, c, new THREE.CylinderGeometry(top, bottom, len, 14).scale(1, 1, depth), x, y, z);
+  const box = (p, c, x, y, z, w, h, d) => !hasDetail&&add(p, c, new THREE.BoxGeometry(w, h, d), x, y, z);
   const pelvis = joint(root, 0, HIP);
   pelvis.name='Pelvis';
   oval(pelvis, denim, 0, 0.005, -0.014, 0.167, 0.112, 0.109);
@@ -131,8 +134,10 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     mesh.castShadow = mesh.receiveShadow = true;
     parent.add(mesh);
   }
+  const art=hasDetail?attachCharacterDetail({root,pelvis,chest,head,arms,legs},avatar,colour):null;
 
-  function animate(phase, gait, run, airborne, verticalSpeed) {
+  function animate(phase, gait, run, airborne, verticalSpeed,dt=0) {
+    art?.grip(false);
     const cycle = phase * TAU;
     const walkHeight = 0.009 - 0.022 * Math.cos(cycle * 2);
     const runHeight = -0.035 - 0.027 * Math.cos(cycle * 2);
@@ -165,9 +170,11 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
       shoulder.rotation.set(airborne ? -0.36 - clamp(verticalSpeed * 0.045, -0.18, 0.22) : swing * (0.29 + run * 0.26) * gait, 0, side * (0.09 + 0.07 * gait));
       elbow.rotation.x = -0.13 - (airborne ? 0.56 : (0.14 + run * 0.8 + 0.13 * Math.max(0, -swing)) * gait);
     }
+    art?.blink(dt);
   }
   function dispose() {
-    root.traverse(object => object.geometry?.dispose());
+    if(art)art.dispose();
+    else root.traverse(object => object.geometry?.dispose());
     for (const material of materials.values()) material.dispose();
   }
 
@@ -190,7 +197,9 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     lower.position.set(0,-first,0);
   }
   const rotationVector=new THREE.Vector3();
-  function pedal(phase,steering,pedals) {
+  function pedal(phase,steering,pedals,dt=0) {
+    art?.grip(true);
+    art?.blink(dt);
     pelvis.position.set(0,1.017,-0.346);
     pelvis.rotation.set(0,0,0);
     chest.position.x=0;
@@ -223,5 +232,5 @@ export function createProtagonist(avatar = PRIMARY_AVATAR, colour = PRIMARY_COLO
     }
   }
   animate(0, 0, 0, false, 0);
-  return { root, animate, pedal, dispose };
+  return {root,animate,pedal,dispose,setAppearance:art?.setAppearance};
 }

@@ -104,7 +104,7 @@ export class DrivableCar {
 
     // ---- Looks: spin the wheels, glow the brake lights ----
     this.travel += (this.position.x-beforeX)*fwd.x + (this.position.z-beforeZ)*fwd.z;
-    this.mesh.userData.animate(this.travel, input.steer * 0.38);
+    this.mesh.userData.animate(this.travel, input.steer * 0.38, dt);
     this.braking = input.brake > 0 && this.speed > 0.5;
     if (this.mesh.userData.tailMat) this.mesh.userData.tailMat.emissiveIntensity = this.braking || input.handbrake ? 4 : 1.2;
     return crashed;

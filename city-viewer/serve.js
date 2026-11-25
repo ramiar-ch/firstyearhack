@@ -23,6 +23,7 @@ const types = {
   '.json': 'application/json',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.glb': 'model/gltf-binary',
   '.svg': 'image/svg+xml',
 };
 
