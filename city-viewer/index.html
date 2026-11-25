@@ -323,6 +323,7 @@ import { WantedLevel } from './game/wanted.js';
 
 import { InputState, KeyboardMouseSource, BotSource, pollGamepadJoins, GamepadSource } from './js/input.js';
 import * as Players from './js/players.js';
+import { createProtagonist } from './js/protagonist.js';
 import * as ChaseCam from './js/chaseCam.js';
 import * as Views from './js/views.js';
 import * as Hud from './js/hud.js';
@@ -509,6 +510,17 @@ function texNoise(){const S=256;return canvasTex(S,(g)=>{const img=g.createImage
   for(const {x,z} of bikeStations){g.beginPath();g.arc((x/RH+1)*S/2,(z/RH+1)*S/2,4.1,0,Math.PI*2);g.fill();g.stroke();}},{srgb:false});}
 function texLeaf(){return canvasTex(256,(g,S)=>{g.fillStyle='#b8b8b8';g.fillRect(0,0,S,S);for(let i=0;i<1100;i++){const v=rr(110,255)|0;g.fillStyle=`rgb(${v},${v},${v})`;g.beginPath();g.ellipse(rand()*S,rand()*S,rr(2,6),rr(1,3),rand()*3,0,7);g.fill();}});}
 function texBark(){return canvasTex(128,(g,S)=>{g.fillStyle='#8a8070';g.fillRect(0,0,S,S);for(let i=0;i<60;i++){g.fillStyle=pick(['#b8b09a','#6a6050','#cfc6ae','#7d7462']);g.beginPath();g.ellipse(rand()*S,rand()*S,rr(5,16),rr(4,10),rand()*3,0,7);g.fill();}addNoise(g,S,16);});}
+function texBenchSlats(){return canvasTex(128,(g,S)=>{
+  g.fillStyle='#816751';g.fillRect(0,0,S,S);
+  for(let row=0;row<32;row++){
+    const grain=hash2(row*3,177);
+    g.strokeStyle=`rgba(${grain>0.5?'206,182,145':'44,32,26'},${0.10+grain*0.16})`;
+    g.lineWidth=1+grain;
+    g.beginPath();g.moveTo(0,row*4);
+    g.bezierCurveTo(S*.35,row*4+(grain-.5)*10,S*.62,row*4-(grain-.5)*8,S,row*4);
+    g.stroke();
+  }
+});}
 function texRail(){return canvasTex(128,(g,S)=>{g.fillStyle='#4a453e';g.fillRect(0,0,S,S);addNoise(g,S,40);for(let y=0;y<S;y+=16){g.fillStyle='#6d665a';g.fillRect(S*0.08,y+3,S*0.84,7);}g.fillStyle='#b5b5b5';g.fillRect(S*0.25,0,3,S);g.fillRect(S*0.75-3,0,3,S);});}
 function texArches(){return canvasTex(512,(g,S)=>{g.fillStyle='#6b4535';g.fillRect(0,0,S,S);for(let r=0;r<64;r++)for(let i=0;i<24;i++){g.fillStyle=hsl(14+rr(-5,5),rr(30,45),rr(24,34));g.fillRect(i*22+(r%2)*11,r*8,20,6);}
   g.fillStyle='#14100e';g.beginPath();g.moveTo(S*0.18,S);g.lineTo(S*0.18,S*0.45);g.arc(S*0.5,S*0.45,S*0.32,Math.PI,0);g.lineTo(S*0.82,S);g.closePath();g.fill();
@@ -769,6 +781,10 @@ void win(inout vec3 col,inout float gl,inout vec3 em,float lx,float ly,float W,f
   float g=gIn*(1.0-b);float rec=smoothstep(0.0,0.2,Hh-fr-ly)*smoothstep(0.0,0.14,lx+hw-fr);float h=h21(cell+seed*13.0);
   vec3 gc=vec3(0.13,0.16,0.19)*(0.7+0.6*h)*mix(1.35,0.75,ly/Hh)*mix(0.5,1.0,rec);
   float cur=step(0.55,fract(h*7.3))*step(hw*0.42,abs(lx));gc=mix(gc,vec3(0.7,0.64,0.52)*0.45*mix(0.6,1.0,rec),cur*0.9);
+  // Vertical curtains and restrained sky reflections add depth to the inset panes.
+  float fold=0.88+0.12*cos(lx*34.0+h*6.283);
+  gc*=mix(1.0,fold,cur*(1.0-smoothstep(0.045,0.20,aa)));
+  gc+=vec3(0.048,0.065,0.079)*smoothstep(0.32,0.93,ly/Hh)*(1.0-cur);
   float reveal=smoothstep(0.025,0.14+aa,min(hw-abs(lx),min(ly,Hh-ly)));
   float headShadow=smoothstep(0.0,0.18+aa,Hh-ly);
   vec3 revealColor=frameC*mix(1.13,0.68,reveal)*mix(0.76,1.0,headShadow);
@@ -819,10 +835,14 @@ if(st==4){
       col=mix(col,wallC*0.78,pier*0.66);
     }else if(facade==4){
       W*=0.91;Hh*=1.08;bars=2.0;
-      if(fi<0.5)col=mix(col,trimC,box2(fx,ly0,-W*0.65,flH*wy-0.14,W*0.65,flH*wy-0.045,aa)*0.84);
+      if(fi<0.5)col=mix(col,vec3(0.31,0.16,0.11),box2(fx,ly0,-W*0.65,flH*wy-0.17,W*0.65,flH*wy-0.09,aa)*0.84);
     }
     if((st==0||st==1)&&mod(rel,flH)<0.16)col=mix(col,trimC,0.8);
     win(col,gl,em,fx,ly0-flH*wy,W,Hh,aa,vec2(bi,fi),seed,bars,arch,uFrame,trimC,0.36,1.0);
+    if(facade==4&&fi<0.5){
+      float drip=box2(fx,ly0,-W*0.50,flH*wy-0.25,W*0.50,flH*wy-0.17,aa);
+      col*=1.0-drip*0.14;
+    }
     if((st==3||st==2)&&fi<0.5&&mod(vari,3.0)<1.0){float bal=box2(fx,ly0,-W*0.5-0.3,flH*wy-0.05,W*0.5+0.3,flH*wy+0.9,aa);float bx=mod(u,0.12);float bb=(1.0-smoothstep(0.012,0.012+aa,min(bx,0.12-bx)))+(1.0-smoothstep(0.025,0.025+aa,abs(ly0-flH*wy-0.88)));col=mix(col,vec3(0.03),bal*min(bb,1.0)*(1.0-far));}
   }
   if(v<gH&&!blank){
@@ -1186,7 +1206,7 @@ function toPavement(x,z){const f=roadFrameFast(x,z,16);if(!f)return {x,z,ry:0};c
   if(f.d<hw+0.8){x=f.px+nx*side*(hw+1.1);z=f.pz+nz*side*(hw+1.1);}return {x,z,ry:Math.atan2(nx*side,nz*side),f,side};}
 function buildProps(){
   const black=std({color:0x15171a,roughness:0.5,metalness:0.3}),red=std({color:0xc8102e,roughness:0.45}),white=std({color:0xf2f2ee,roughness:0.5}),glassM=std({color:0x9fb2bf,roughness:0.05,metalness:0.6,transparent:true,opacity:0.35});
-  const steel=std({color:0x8a9096,roughness:0.4,metalness:0.6}),wood=std({color:0x6a4a32,roughness:0.8});
+  const steel=std({color:0x8a9096,roughness:0.4,metalness:0.6}),wood=std({map:texBenchSlats(),color:0xb3a69a,roughness:0.91});
   const round=texRoundel();const roundMat=std({map:round,roughness:0.5,emissive:0xffffff,emissiveMap:round,emissiveIntensity:0.05});
   SIG_MATS=[std({color:0x220000,emissive:0xff2010,emissiveIntensity:0}),std({color:0x221400,emissive:0xffa000,emissiveIntensity:0}),std({color:0x002210,emissive:0x20ff70,emissiveIntensity:0})];
   BEACON_MAT=std({color:0xffa020,emissive:0xff9010,emissiveIntensity:1,roughness:0.3});
@@ -1856,11 +1876,11 @@ function mutedPaint(color){
 }
 const dockPaint=mutedPaint(new THREE.Color(0x178995));
 const driveLook=new DriveLook();
-const canDragDrive=()=>readyToPause&&!intro&&!pauseMenu.open&&!inMainMenu&&!split?.on&&(mode==='strand'||mode==='drive');
+const canLookWhileDriving=()=>readyToPause&&!intro&&!pauseMenu.open&&!inMainMenu&&!split?.on&&(mode==='strand'||mode==='drive');
 function walkOccupied(x,z){
   return Boolean(vehicleSpace.hit(CityTraffic.footprint(x,z,0,0.58,0.58)));
 }
-function makeVehicleObject(kind,model,color,riding){
+function makeVehicleObject(kind,model,color,riderType=null){
   const g=new THREE.Group();
   const paint=vehicleMaterials.paint.clone();
   paint.color.copy(color);
@@ -1909,8 +1929,9 @@ function makeVehicleObject(kind,model,color,riding){
     });
     g.add(crank);
   }
-  if(riding){
-    const rider=cityModels.cyclist();
+  if(riderType){
+    const hero=riderType==='player'?createProtagonist():null;
+    const rider=hero?{group:hero.root,pedal:hero.pedal,dispose:hero.dispose}:cityModels.cyclist();
     g.add(rider.group);
     g.userData.rider=rider;
   }
@@ -1932,14 +1953,14 @@ function animateVehicle(g,travel,turn,showRider){
   }
   if(rider){
     rider.group.visible=showRider;
-    if(showRider)rider.pedal(phase);
+    if(showRider)rider.pedal(phase,steering,pedals);
   }
 }
 const streetModels={};let patrolKit;
 function makeStreetVehicle(colour,police=false,kind='car',preservePaint=false){
   const model=streetModels[kind]??=(kind==='bike'?bikeModel:cityModels.vehicle(kind,{separateBrakeLights:true}));
   const paint=new THREE.Color(colour);if(!preservePaint)mutedPaint(paint);
-  const root=new THREE.Group(),body=makeVehicleObject(kind,model,paint,kind==='bike');
+  const root=new THREE.Group(),body=makeVehicleObject(kind,model,paint,kind==='bike'?'player':null);
   root.userData.kind=kind;root.userData.spec=CARS[kind];root.userData.colour=paint.getHex();root.userData.occupied=false;
   root.userData.body=body;
   body.name='Detailed vehicle body';
@@ -1966,14 +1987,14 @@ function makeStreetVehicle(colour,police=false,kind='car',preservePaint=false){
     const paint=body.userData.paint,index=ENVMATS.indexOf(paint);if(index>=0)ENVMATS.splice(index,1);
     paint.dispose();root.userData.tailMat?.dispose();root.userData.beacons?.forEach(m=>m.dispose());
     const owned=new Set();
-    body.userData.rider?.group.traverse(o=>{if(o.geometry)owned.add(o.geometry);if(o.material)owned.add(o.material);});
+    body.userData.rider?.dispose?.();
     for(const pedal of body.userData.pedals||[])for(const mesh of [pedal.arm,pedal.pedal])owned.add(mesh.geometry);
     owned.forEach(resource=>resource.dispose?.());
   };
   return root;
 }
 function placeBikeObject(v,parent,rider){
-  const g=makeVehicleObject('bike',bikeModel,v.col,rider);
+  const g=makeVehicleObject('bike',bikeModel,v.col,rider?'traffic':null);
   g.name=rider?'Traffic bicycle':'Shared bicycle';
   g.position.set(v.px,actorGround(v),v.pz);
   g.rotation.y=v.yaw;
@@ -2050,7 +2071,7 @@ function buildBikeStations(){
 function buildDriveCars(){
   for(const k in CARS){
     const model=VT[k].model;
-    const g=makeVehicleObject(k,model,mutedPaint(new THREE.Color(CARS[k].paint)),k==='bike');
+    const g=makeVehicleObject(k,model,mutedPaint(new THREE.Color(CARS[k].paint)),k==='bike'?'player':null);
     g.visible=false;DRIVE.group.add(g);DRIVE.meshes[k]=g;
   }
   DRIVE.group.visible=false;scene.add(DRIVE.group);
@@ -2242,8 +2263,8 @@ function flyTo(t,off){if(mode==='strand'){relocateStrandCar(t.x,t.z);return;}if(
 let toastT;function showToast(s){const t=document.getElementById('toast');t.textContent=s;t.style.opacity=1;clearTimeout(toastT);toastT=setTimeout(()=>t.style.opacity=0,1500);}
 function updateHelp(){
   const forward=keyLabel(bindings.KeyW);
-  const driveHelp=LANG==='zh'?`单人驾驶时按住鼠标左键拖动视角，同时按住 ${forward} 可跟随转向。`:
-    `In solo driving, drag with the left mouse button to look around. Hold ${forward} to steer toward the view.`;
+  const driveHelp=LANG==='zh'?`单人驾驶时点击画面锁定鼠标，移动鼠标转动视角。按住 ${forward} 可跟随转向，Esc 释放鼠标。`:
+    `In solo driving, click the game to lock the mouse. Move it to look around and hold ${forward} to steer toward the view. Esc releases the mouse.`;
   document.getElementById('help').textContent=i18n('mouseHelp')+' '+driveHelp;
   renderBindings();
   const showXhair=mode==='fly'||(mode==='walk'&&player&&player.view&&player.view.firstPerson&&Players.players.length<=1);
@@ -2480,7 +2501,9 @@ function setupMenus(){
   document.addEventListener('pointerlockchange',()=>{
     if(document.pointerLockElement===renderer.domElement){lockMode=mode;return;}
     const unlocked=lockMode===mode;lockMode=null;
-    if(unlocked&&!pauseMenu.open){unlockedAt=performance.now();showPause();}
+    if(unlocked&&!pauseMenu.open&&(mode==='walk'||mode==='fly'||canLookWhileDriving())){
+      unlockedAt=performance.now();showPause();
+    }
   });
 }
 const labels=[];
@@ -2555,11 +2578,17 @@ function setupUI(){
   const el=renderer.domElement;
   let draggingDrive=false,lastX=0,lastY=0;
   el.addEventListener('mousedown',event=>{
-    if(event.button!==0||!canDragDrive())return;
+    if(event.button!==0||!canLookWhileDriving())return;
+    if(document.pointerLockElement===el)return;
     draggingDrive=true;lastX=event.clientX;lastY=event.clientY;
+    try{el.requestPointerLock?.()?.catch(()=>{});}catch(_){}
   });
   addEventListener('mousemove',event=>{
-    if(!draggingDrive||!(event.buttons&1)||!canDragDrive())return;
+    if(!canLookWhileDriving())return;
+    if(document.pointerLockElement===el){
+      driveLook.drag(event.movementX,event.movementY);return;
+    }
+    if(!draggingDrive||!(event.buttons&1))return;
     driveLook.drag(event.clientX-lastX,event.clientY-lastY);
     lastX=event.clientX;lastY=event.clientY;
   });
@@ -3118,6 +3147,7 @@ function toggleSplit(enabled=!split?.on){
   if(intro||!car||enabled===split.on)return;
   if(enabled&&mode!=='strand'&&!enterNearbyVehicle())return;
   const on=split.setEnabled(enabled,car);
+  if(on&&document.pointerLockElement===renderer.domElement)document.exitPointerLock();
   driveLook.reset();
   syncStreetObstacles();
   if(on)report.stats.players=2;

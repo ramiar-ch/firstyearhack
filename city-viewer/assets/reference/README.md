@@ -1,0 +1,7 @@
+# Character, vehicle and street study
+
+The [reference sheet](character-vehicle-street-study.png) was generated with the built-in ImageGen tool. It guides the protagonist's rain jacket and riding pose, the shared bicycle basket, estate trim, sash windows and street materials. Game assets are modeled and animated in Three.js.
+
+## Generation prompt
+
+> A landscape production reference sheet for an original realistic London browser game, clean neutral grey paper background and even overcast lighting, head-to-toe front and rear views of the SAME adult man plus a side profile of him pedaling a teal shared city bicycle. Adult lead has a short dark brown textured crop, medium warm brown skin, a muted oxblood rain jacket with dark cuff trims and zip pockets, slate indigo trousers and charcoal lace-up shoes. On the bicycle show his hands properly wrapping the flat handlebars, seated pelvis on saddle, one foot at the low pedal and one at the high pedal, natural forward lean and articulated knees. Lower strip has two clear small modeling vignettes: a muted slate-blue UK estate car with dark glazing, crisp seals and restrained trim, and a grey London masonry facade with recessed sash and terracotta sill, behind a slatted timber bench. Realistic anatomy, human proportions, credible cloth folds, physical material finishes, clear easy-to-read silhouettes at game-camera scale, separate studies without overlap. Minimal white space separators, no text, no labels, no existing game characters, vehicle brands, logos, weapons, or watermarks.

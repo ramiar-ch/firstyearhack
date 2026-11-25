@@ -197,6 +197,15 @@ function createCityModels(THREE, mergeGeometries, time) {
       estate ? [[0.065,0.26,0.18,0.87],[0.29,0.59,0.12,0.88],[0.63,0.95,0.12,0.87]] :
       [[0.09, 0.46, 0.12, 0.88], [0.51, 0.95, 0.12, 0.88]];
     carCabin(b, sill, roof, panes);
+    if(estate){
+      // Satin window belt and rear quarter outline sit just outside the gasket.
+      const [rear,front,rearWidth,frontWidth,glassY]=sill;
+      for(const side of [-1,1]){
+        rod(b.trim,[side*(rearWidth+0.009),glassY+0.06,rear+0.18],
+          [side*(frontWidth+0.012),glassY+0.06,front-0.20],0.009,0x8f9393,5);
+        rod(b.trim,[side*0.722,1.57,-1.97],[side*0.714,1.57,0.36],0.008,0x797f80,5);
+      }
+    }
 
     for (const side of [-1, 1]) {
       const mx = side * (w + 0.045);
@@ -425,11 +434,16 @@ function createCityModels(THREE, mergeGeometries, time) {
       rod(fork, [0, 1.035, -0.045], [side * 0.20, 1.045, -0.09], 0.014, chrome);
       rod(fork, [side * 0.20, 1.045, -0.09], [side * 0.286, 1.045, -0.132], 0.021, rubber);
       rod(fork,[side*0.205,1.035,-0.084],[side*0.268,1.017,-0.052],0.010,black,5);
-      box(fork, [0.024, 0.13, 0.22], [side * 0.14, 0.895, 0.154], black);
+      for(const y of [0.844,0.884,0.924]){
+        box(fork, [0.022,0.019,0.217], [side*0.14,y,0.154], rubber);
+      }
+      for(const z of [0.056,0.252])box(fork,[0.024,0.129,0.021],[side*0.14,0.887,z],black);
     }
     rod(fork, [0, 0.71, 0.035], [0, 1.035, -0.045], 0.025, chrome);
     box(fork, [0.28, 0.034, 0.21], [0, 0.823, 0.154], black);
-    box(fork, [0.28, 0.13, 0.025], [0, 0.895, 0.25], black);
+    for(const y of [0.845,0.885,0.925])box(fork,[0.28,0.018,0.024],[0,y,0.25],rubber);
+    box(fork,[0.28,0.016,0.025],[0,0.951,0.25],black);
+    box(fork,[0.093,0.052,0.020],[0,0.896,0.258],black);
     box(fork, [0.077, 0.047, 0.028], [0, 0.895, 0.268], 0xe9e9d7);
     rims.add(new THREE.TorusGeometry(0.318, 0.027, 6, 24).rotateY(Math.PI / 2), rubber);
     rims.add(new THREE.TorusGeometry(0.293, 0.011, 5, 24).rotateY(Math.PI / 2), chrome);
@@ -531,6 +545,10 @@ function createCityModels(THREE, mergeGeometries, time) {
         oval([0.018, 0.031, 0.020], [side * 0.090, 1.646, 0.005], 0xe4c6b0, 0, 2);
         const pocket = new THREE.BoxGeometry(0.008, 0.087, 0.010).rotateZ(side * -0.47);
         batch.add(pocket.translate(side * 0.105, 1.045, 0.108), 0x676b70, 0, 1);
+        if(!child&&!worker){
+          const seam = new THREE.BoxGeometry(0.009,0.155,0.009).rotateZ(side*0.23);
+          batch.add(seam.translate(side*0.145,1.298,0.088),0x8c8b8c,0,1);
+        }
         tapered(0.041,0.037,0.036,0.94,[side*0.233,0.938,0.012],0xb1b4b4,side*3,1);
       }
     }

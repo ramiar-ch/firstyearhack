@@ -3,6 +3,18 @@ function createCityLandmarks({THREE, mergeGeometries, buildings, names, roofs, p
   const group = new THREE.Group();
   group.name = 'Detailed landmarks';
   const stone = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.87});
+  stone.onBeforeCompile=shader=>{
+    shader.vertexShader='varying vec3 vStonePosition;\n'+shader.vertexShader.replace('#include <begin_vertex>',
+      '#include <begin_vertex>\nvStonePosition=position;');
+    shader.fragmentShader='varying vec3 vStonePosition;\n'+shader.fragmentShader.replace('#include <color_fragment>',`
+      #include <color_fragment>
+      vec3 stoneCell=floor(vStonePosition*15.0);
+      float stoneGrain=fract(sin(dot(stoneCell,vec3(17.17,51.49,29.71)))*12657.3);
+      float stoneDistance=max(length(dFdx(vStonePosition)),length(dFdy(vStonePosition)));
+      float mottling=sin(vStonePosition.x*1.7+vStonePosition.z*2.3+sin(vStonePosition.y*0.49));
+      diffuseColor.rgb*=1.0+0.018*mottling+(stoneGrain-0.5)*0.047*(1.0-smoothstep(0.03,0.16,stoneDistance));
+    `);
+  };
   const metal = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.44, metalness: 0.38});
   const windows = new THREE.MeshStandardMaterial({vertexColors: true, roughness: 0.35, emissive: 0xe1b883, emissiveIntensity: 0});
   const clockFaces = [], omitted = new Set(), styles = new Map();

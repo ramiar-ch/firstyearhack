@@ -31,11 +31,13 @@ The first visit needs internet access for Three.js and the QR code library on js
 | G / H or mouse wheel | Street vehicle selection | Previous / next nearby vehicle while on foot |
 | J | Street item | Use the equipped item (P1) |
 
-In single-viewport driving, hold the left mouse button and drag to look around. Hold the forward key (W by default) to steer toward the view. The camera centers on the vehicle heading after about 1.25 seconds of mouse inactivity. A/D overrides the steering assistance.
+In single-viewport driving, click the game view to lock the mouse, then move it to look around. Esc releases the mouse and opens Pause. Hold the forward key (W by default) to steer toward the view. The camera centers on the vehicle heading after about 1.25 seconds of mouse inactivity. A/D overrides the steering assistance. Hold the left mouse button and drag if the browser prevents locking.
 
 In Street Missions, the 1997 boot and opening swoop end at the orange Strand car. Press a key to skip the intro or open `?skipIntro=1`. Press B or use the split-screen toggle in Settings for two cars. P1 uses WASD, and P2 uses the arrow keys with Right Ctrl for the handbrake. Entering Walk ends the two-car session. In Sightseeing Walk, V switches between first and third person. Press A on a gamepad or select **Add bot** under Settings for up to four walking views.
 
 While walking in Street Missions, nearby cars, taxis, vans, buses and bicycles appear in a small bubble beside the character. The range is 6 m from the vehicle's body; vehicles behind walls or outside the playable area are excluded. G/H and the mouse wheel choose a candidate, and F enters it. The range is checked again on entry, so moving traffic cannot be selected from far away. F gets out into a clear space beside the vehicle. Previously used vehicles stay parked and can be entered again. The selected model, paint and parked vehicles are included in the Street save. These desktop shortcuts remain editable in Settings; phone controls are unchanged.
+
+The playable cyclist uses the protagonist's model, with hands posed to the steering bar and feet posed to the pedals. See the [character, vehicle and street study](assets/reference/README.md) for the visual reference.
 
 Deliveries take place within 750 m of KCL. Reach the orange pickup marker, then the blue drop-off before time expires. Either driver can complete a delivery. Up to three patrol cars chase the drivers along the streets. Use the red phone box with E (Enter for P2), or press R in the Strand car or on foot, to travel between 2026 and 1997.
 

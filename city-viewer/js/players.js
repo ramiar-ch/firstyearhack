@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { InputState, fillBotInput } from './input.js';
 import { createViewState, snapChase } from './chaseCam.js';
-import { createProtagonist, strideLength } from './protagonist.js';
+import { createProtagonist, strideLength, PRIMARY_AVATAR, PRIMARY_COLOUR } from './protagonist.js';
 
 const WALK = 1.7;
 const JOG = 5.5;
@@ -16,11 +16,11 @@ const MAX_SLOTS = 8;
 const MAX_VIEWS = 4;
 
 const SLOT_COLOURS = [
-  0xc8102e, 0x2a6fdb, 0xe8a317, 0x2e9b6a, 0x9b59b6, 0xe67e22, 0x1abc9c, 0xf1c40f,
+  PRIMARY_COLOUR, 0x2a6fdb, 0xe8a317, 0x2e9b6a, 0x9b59b6, 0xe67e22, 0x1abc9c, 0xf1c40f,
 ];
 const SLOT_NAMES = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8'];
 const AVATARS = [
-  {style:'man', skin:0xc7926b, trousers:0x3c4852, scale:1.02},
+  PRIMARY_AVATAR,
   {style:'woman', skin:0xa76d4d, trousers:0x465461, scale:0.97},
   {style:'man', skin:0xe5b69a, trousers:0x57534f, scale:0.99},
   {style:'woman', skin:0x865b49, trousers:0x485350, scale:1.01},
